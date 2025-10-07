@@ -1,8 +1,11 @@
-require('dotenv').config(); // Load environment variables
-
+require('dotenv').config();
 const express = require("express");
 const axios = require("axios");
+const cors = require("cors"); // <--- ADD THIS LINE
 const app = express();
+
+app.use(cors()); // <--- ADD THIS LINE
+
 const port = process.env.PORT || 3000;
 
 // Parse JSON body
