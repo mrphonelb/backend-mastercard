@@ -17,7 +17,7 @@ app.get("/", (req, res) => {
 
 // ✅ Initiate Checkout Endpoint
 app.post("/initiate-checkout", async (req, res) => {
-  const { amount, currency, orderId, invoiceId } = req.body;
+  const { amount, currency, orderId, invoiceId, description } = req.body;
 
   try {
     const response = await axios.post(
@@ -29,16 +29,15 @@ app.post("/initiate-checkout", async (req, res) => {
           operation: "PURCHASE",
           merchant: {
             name: "Mr. Phone",
-            url: "https://www.mrphonelb.com"
           },
           returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
         },
         order: {
-          amount: amount,
-          currency: currency,
-          id: orderId,
-          description: "Goods and Services"
-        }
+  amount: amount,
+  currency: currency,
+  id: orderId,
+  description: description || `Order #${invoiceId} - Mr. Phone Lebanon`
+}
       },
       {
         // ✅ Correct authentication format for Mastercard Gateway
