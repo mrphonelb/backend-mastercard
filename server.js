@@ -39,7 +39,7 @@ app.post("/initiate-checkout", async (req, res) => {
       shipping: "HIDE"
     },
     returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`,
-    redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/payment_error?invoice_id=${invoiceId}`,
+    redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoiceId}`,
     retryAttemptCount: 2
   
     theme: {
