@@ -20,6 +20,9 @@ app.post("/initiate-checkout", async (req, res) => {
   const { amount, currency, orderId, invoiceId, description } = req.body;
 
   try {
+
+    const orderId = draftId; // same value
+
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
@@ -38,8 +41,8 @@ app.post("/initiate-checkout", async (req, res) => {
       customerEmail: "HIDE",
       shipping: "HIDE"
     },
-    returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`,
-    redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoiceId}`,
+    returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?order_id=${orderId}`,
+    redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?order_id=${orderId}`,
     retryAttemptCount: 2
   
     theme: {
