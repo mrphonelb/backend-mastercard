@@ -1,55 +1,54 @@
-require("dotenv").config();
+require('dotenv').config();
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
 const port = process.env.PORT || 3000;
 
-// ✅ Health check
+// ✅ Test route
 app.get("/", (req, res) => {
   res.send("Backend is running and ready for Mastercard Hosted Checkout!");
 });
 
 // ✅ Initiate Checkout Endpoint
 app.post("/initiate-checkout", async (req, res) => {
-  const { amount, currency, orderId, invoiceId, description } = req.body;
+  const { amount, currency, orderId, invoiceId } = req.body;
 
   try {
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
-        apiOperation: "CREATE_CHECKOUT_SESSION",
+        apiOperation: "INITIATE_CHECKOUT",
+        checkoutMode: "WEBSITE",
+        interaction: {
+          operation: "PURCHASE",
+          merchant: {
+            name: "Mr. Phone",
+            url: "https://www.mrphonelb.com"
+          },
+          returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
+        },
         order: {
           amount: amount,
-          currency: currency || "USD",
+          currency: currency,
           id: orderId,
-          description: description || `Order #${invoiceId} - Mr. Phone Lebanon`
-        },
-        interaction: {
-  operation: "PURCHASE",
-  merchant: {
-    name: "Mr. Phone Lebanon",
-    address: { line1: "Beirut, Lebanon" }
-  },
-  returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`,
-  displayControl: {
-    billingAddress: "HIDE",
-    shipping: "HIDE",
-    customerEmail: "HIDE"
-  }
-}
-
+          description: "Goods and Services"
+        }
       },
       {
+        // ✅ Correct authentication format for Mastercard Gateway
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
           password: process.env.API_PASSWORD
         },
-        headers: { "Content-Type": "application/json" }
+        headers: {
+          "Content-Type": "application/json"
+        }
       }
     );
 
