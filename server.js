@@ -17,7 +17,10 @@ app.get("/", (req, res) => {
 
 // ✅ Initiate Checkout Endpoint
 app.post("/initiate-checkout", async (req, res) => {
-  const { amount, currency, orderId, invoiceId, description } = req.body;
+  const { amount, currency, draftId, invoiceId, description } = req.body;
+
+  // use draftId as orderId
+const orderId = draftId;
 
   try {
 
