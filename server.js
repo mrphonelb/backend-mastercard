@@ -37,7 +37,7 @@ app.post("/initiate-checkout", async (req, res) => {
           amount: amount,
           currency: currency,
           id: orderId,
-          description: description || `Order #${invoiceId} - Mr. Phone
+          description: description || "Goods and Services"
         }
       },
       {
