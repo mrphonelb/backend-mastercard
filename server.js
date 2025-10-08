@@ -1,63 +1,65 @@
-require('dotenv').config();
+require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
-const cors = require("cors"); // <--- ADD THIS LINE
-const app = express();
+const cors = require("cors");
 
-app.use(cors()); // <--- ADD THIS LINE
+const app = express();
+app.use(cors());
+app.use(express.json());
 
 const port = process.env.PORT || 3000;
 
-// Parse JSON body
-app.use(express.json());
-
-// ✅ Test route
+// ✅ Health check
 app.get("/", (req, res) => {
   res.send("Backend is running and ready for Mastercard Hosted Checkout!");
 });
 
 // ✅ Initiate Checkout Endpoint
 app.post("/initiate-checkout", async (req, res) => {
-  const { amount, currency, orderId, invoiceId } = req.body;
+  const { amount, currency, orderId, invoiceId, description } = req.body;
 
   try {
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
-        apiOperation: "INITIATE_CHECKOUT",
-        checkoutMode: "WEBSITE",
+        apiOperation: "CREATE_CHECKOUT_SESSION",
+        order: {
+          amount: amount,
+          currency: currency || "USD",
+          id: orderId,
+          description: description || `Order #${invoiceId} - Mr. Phone Lebanon`
+        },
         interaction: {
           operation: "PURCHASE",
           merchant: {
-            name: "Mr. Phone",
-            url: "https://www.mrphonelb.com"
+            name: "Mr. Phone Lebanon",
+            url: "https://www.mrphonelb.com",
+            address: { line1: "Beirut, Lebanon" }
           },
-          returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
-        },
-        order: {
-          amount: amount,
-          currency: currency,
-          id: orderId,
-          description: "Goods and Services"
+          returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`,
+          displayControl: {
+            billingAddress: "HIDE",
+            shipping: "HIDE",
+            customerEmail: "HIDE"
+          }
         }
       },
       {
-        // ✅ Correct authentication format for Mastercard Gateway
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
           password: process.env.API_PASSWORD
         },
-        headers: {
-          "Content-Type": "application/json"
-        }
+        headers: { "Content-Type": "application/json" }
       }
     );
 
     console.log("✅ Response from Mastercard:", response.data);
     res.json(response.data);
-
   } catch (error) {
-    console.error("❌ Error from Mastercard API:", error.response ? error.response.data : error.message);
+    console.error(
+      "❌ Error from Mastercard API:",
+      error.response ? error.response.data : error.message
+    );
     res.status(500).json({
       error: "Failed to initiate checkout",
       details: error.response ? error.response.data : error.message
