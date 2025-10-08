@@ -43,7 +43,7 @@ app.post("/initiate-checkout", async (req, res) => {
     },
     returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?order_id=${orderId}`,
     redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?order_id=${orderId}`,
-    retryAttemptCount: 2
+    retryAttemptCount: 2,
   
     theme: {
             style: "modern",           // Modern checkout theme
