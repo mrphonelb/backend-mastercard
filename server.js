@@ -41,7 +41,16 @@ app.post("/initiate-checkout", async (req, res) => {
     returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`,
     redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/payment_error?invoice_id=${invoiceId}`,
     retryAttemptCount: 2
-  },
+  
+    theme: {
+            style: "modern",           // Modern checkout theme
+            colorScheme: "LIGHT",      // Light background
+            primaryColor: "#d9498e",   // Pink main color (buttons, highlights)
+            secondaryColor: "#000000", // Black secondary (for back button)
+            buttonRadius: "6px"        // Optional: rounded buttons
+          }
+        },
+
   order: {
     id: orderId,
     amount: amount,
