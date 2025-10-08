@@ -30,7 +30,7 @@ app.post("/initiate-checkout", async (req, res) => {
     locale: "en_US",
     merchant: {
       name: "Mr. Phone Lebanon",
-      logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/3730f7ee-b961-4666-ba61-ee279dac2af9.png",
+      logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
       url: "https://www.mrphonelb.com"
     },
     displayControl: {
