@@ -17,11 +17,11 @@ app.get("/", (req, res) => {
 
 // ✅ Initiate Checkout Endpoint
 app.post("/initiate-checkout", async (req, res) => {
-  const { amount, currency, draftId, invoiceId, description } = req.body;
+  const { amount, currency, orderId, invoiceId, description } = req.body;
 
   try {
 
-    const orderId = draftId; // same value
+    console.log("🧾 Incoming payment data:", req.body);
 
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
@@ -58,7 +58,7 @@ app.post("/initiate-checkout", async (req, res) => {
     id: orderId,
     amount: amount,
     currency: currency,
-    description: description || `Order #${invoiceId} - Mr. Phone Lebanon`
+    description: description || `Order #${orderId} - Mr. Phone Lebanon`
   }
 },
       {
