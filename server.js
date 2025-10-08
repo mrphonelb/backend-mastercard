@@ -84,6 +84,38 @@ app.post("/initiate-checkout", async (req, res) => {
   }
 });
 
+
+// ✅ Retrieve Order Endpoint (Check payment status or show receipt)
+app.get("/retrieve-order/:orderId", async (req, res) => {
+  const { orderId } = req.params;
+
+  try {
+    const response = await axios.get(
+      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
+      {
+        auth: {
+          username: `merchant.${process.env.MERCHANT_ID}`,
+          password: process.env.API_PASSWORD
+        },
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    console.log(`✅ Retrieved order ${orderId}:`, response.data);
+    res.json(response.data);
+  } catch (error) {
+    console.error("❌ Error retrieving order:", error.response?.data || error.message);
+    res.status(500).json({
+      error: "Failed to retrieve order",
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+
+
 // ✅ Start the Express server
 app.listen(port, () => {
   console.log(`✅ Server running on http://localhost:${port}`);
