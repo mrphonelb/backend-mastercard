@@ -30,19 +30,19 @@ app.post("/initiate-checkout", async (req, res) => {
           description: description || `Order #${invoiceId} - Mr. Phone Lebanon`
         },
         interaction: {
-          operation: "PURCHASE",
-          merchant: {
-            name: "Mr. Phone Lebanon",
-            url: "https://www.mrphonelb.com",
-            address: { line1: "Beirut, Lebanon" }
-          },
-          returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`,
-          displayControl: {
-            billingAddress: "HIDE",
-            shipping: "HIDE",
-            customerEmail: "HIDE"
-          }
-        }
+  operation: "PURCHASE",
+  merchant: {
+    name: "Mr. Phone Lebanon",
+    address: { line1: "Beirut, Lebanon" }
+  },
+  returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`,
+  displayControl: {
+    billingAddress: "HIDE",
+    shipping: "HIDE",
+    customerEmail: "HIDE"
+  }
+}
+
       },
       {
         auth: {
