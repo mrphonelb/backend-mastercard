@@ -21,10 +21,20 @@ app.get("/", (req, res) => {
 // ==============================================
 app.post("/initiate-checkout", async (req, res) => {
   const { amount, currency, draftId, description, customer } = req.body;
-  const orderId = draftId; // use Daftra draft ID as Mastercard order ID
+  const orderId = draftId; // use Daftra draft ID as Mastercard orderId
 
   try {
     console.log("🧾 Incoming payment data:", req.body);
+
+    // ✅ Only include allowed fields for Mastercard
+    const safeCustomer = {
+      email: customer?.email || "",
+      firstName: customer?.firstName || "",
+      lastName: customer?.lastName || "",
+      phone: {
+        number: customer?.phone || "",
+      },
+    };
 
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
@@ -55,7 +65,17 @@ app.post("/initiate-checkout", async (req, res) => {
           currency,
           description: description || `Draft Order #${orderId} - Mr. Phone Lebanon`,
         },
-        customer: customer || {},
+        customer: safeCustomer, // ✅ only send safe fields
+        // 💾 keep full shipping info for Daftra later
+        metadata: {
+          shipping: {
+            governorate: customer?.governorate || "",
+            district: customer?.district || "",
+            city: customer?.city || "",
+            email: customer?.email || "",
+            phone: customer?.phone || "",
+          },
+        },
       },
       {
         auth: {
@@ -76,6 +96,7 @@ app.post("/initiate-checkout", async (req, res) => {
     });
   }
 });
+
 
 // ==============================================
 // ✅ RETRIEVE ORDER & CREATE DAFTRA INVOICE
