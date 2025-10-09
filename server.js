@@ -88,6 +88,50 @@ app.post("/initiate-checkout", async (req, res) => {
 });
 
 // ==============================================
+// ✅ RETRIEVE ORDER STATUS (for .NetCommerce Verification)
+// ==============================================
+app.get("/retrieve-order/:orderId", async (req, res) => {
+  const { orderId } = req.params;
+
+  console.log(`🔍 Verifying payment for order ${orderId}...`);
+
+  try {
+    // Call Mastercard API to retrieve order details
+    const response = await axios.get(
+      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
+      {
+        auth: {
+          username: `merchant.${process.env.MERCHANT_ID}`,
+          password: process.env.API_PASSWORD,
+        },
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    const orderData = response.data;
+    console.log(`✅ Retrieved order ${orderId}:`, orderData);
+
+    // Return payment result to frontend
+    res.json({
+      orderId,
+      result: orderData.result,
+      status: orderData.status,
+      amount: orderData.amount,
+      currency: orderData.currency,
+      cardType: orderData.sourceOfFunds?.provided?.card?.brand || "Card",
+      transactionTime: orderData.lastUpdatedTime,
+    });
+  } catch (error) {
+    console.error("❌ Error retrieving order:", error.response?.data || error.message);
+    res.status(500).json({
+      error: "Failed to verify order",
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
+
+// ==============================================
 // ✅ START SERVER
 // ==============================================
 app.listen(port, () => {
