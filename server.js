@@ -17,7 +17,7 @@ app.get("/", (req, res) => {
 });
 
 // ==============================================
-// ✅ INITIATE CHECKOUT
+// ✅ INITIATE CHECKOUT (FINAL FIXED)
 // ==============================================
 app.post("/initiate-checkout", async (req, res) => {
   const { amount, currency, draftId, description, customer } = req.body;
@@ -26,14 +26,12 @@ app.post("/initiate-checkout", async (req, res) => {
   try {
     console.log("🧾 Incoming payment data:", req.body);
 
-    // ✅ Only include allowed fields for Mastercard
+    // ✅ Only include allowed fields for Mastercard (flat structure)
     const safeCustomer = {
       email: customer?.email || "",
       firstName: customer?.firstName || "",
       lastName: customer?.lastName || "",
-      phone: {
-        number: customer?.phone || "",
-      },
+      mobilePhone: customer?.phone || "",
     };
 
     const response = await axios.post(
@@ -65,8 +63,9 @@ app.post("/initiate-checkout", async (req, res) => {
           currency,
           description: description || `Draft Order #${orderId} - Mr. Phone Lebanon`,
         },
-        customer: safeCustomer, // ✅ only send safe fields
-        // 💾 keep full shipping info for Daftra later
+        customer: safeCustomer, // ✅ Mastercard-compliant fields only
+
+        // 💾 Keep full shipping info (for Daftra invoice later)
         metadata: {
           shipping: {
             governorate: customer?.governorate || "",
@@ -96,6 +95,7 @@ app.post("/initiate-checkout", async (req, res) => {
     });
   }
 });
+
 
 
 // ==============================================
