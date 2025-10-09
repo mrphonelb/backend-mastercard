@@ -4,9 +4,17 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
+// ✅ FIXED: Enable CORS for all origins (works on iOS Safari iframe)
+app.use(
+  cors({
+    origin: "*", // or "https://www.mrphonelb.com" for stricter control
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
+
+app.use(express.json());
 const port = process.env.PORT || 3000;
 
 // ==============================================
@@ -17,16 +25,15 @@ app.get("/", (req, res) => {
 });
 
 // ==============================================
-// ✅ INITIATE CHECKOUT (Simplified Final Version)
+// ✅ INITIATE CHECKOUT
 // ==============================================
 app.post("/initiate-checkout", async (req, res) => {
   const { amount, currency, draftId, description, customer } = req.body;
-  const orderId = draftId; // use Daftra draft ID as Mastercard order ID
+  const orderId = draftId;
 
   try {
     console.log("🧾 Incoming payment data:", req.body);
 
-    // ✅ Build request to Mastercard API
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
@@ -37,8 +44,7 @@ app.post("/initiate-checkout", async (req, res) => {
           locale: "en_US",
           merchant: {
             name: "Mr. Phone Lebanon",
-            logo:
-              "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
             url: "https://www.mrphonelb.com",
           },
           displayControl: {
@@ -56,7 +62,6 @@ app.post("/initiate-checkout", async (req, res) => {
           currency,
           description: description || `Draft Order #${orderId} - Mr. Phone Lebanon`,
         },
-        // ✅ Optional customer info (non-sensitive)
         customer: {
           email: customer?.email || "",
           firstName: customer?.firstName || "",
@@ -73,7 +78,7 @@ app.post("/initiate-checkout", async (req, res) => {
       }
     );
 
-    console.log("✅ Response from Mastercard:", response.data);
+    console.log("✅ Mastercard session created:", response.data);
     res.json(response.data);
   } catch (error) {
     console.error(
@@ -86,6 +91,7 @@ app.post("/initiate-checkout", async (req, res) => {
     });
   }
 });
+
 
 app.get("/retrieve-order/:orderId", async (req, res) => {
   const { orderId } = req.params;
