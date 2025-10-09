@@ -107,14 +107,27 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
       return res.status(response.status).json({ error: data });
     }
 
-    // ✅ Pick the most recent transaction
+    // ✅ Get all transactions
     const transactions = Array.isArray(data.transaction) ? data.transaction : [];
-    const lastTx = transactions[transactions.length - 1] || {};
-    const lastTxResult = lastTx.result?.toUpperCase() || "UNKNOWN";
-    const gatewayCode = lastTx.response?.gatewayCode?.toUpperCase() || "UNKNOWN";
-    const acquirerMsg = lastTx.response?.acquirerMessage || "No message";
 
-    // ✅ Decide final result more accurately
+    // ✅ Focus only on payment or authorization transactions
+    const paymentTx = transactions
+      .filter(
+        (t) =>
+          t.transaction?.type === "PAYMENT" ||
+          t.transaction?.type === "AUTHORIZATION" ||
+          t.transaction?.type === "CAPTURE"
+      )
+      .pop(); // get the latest one
+
+    const tx = paymentTx || transactions[transactions.length - 1] || {};
+
+    const txResult = tx.result?.toUpperCase() || "UNKNOWN";
+    const gatewayCode = tx.response?.gatewayCode?.toUpperCase() || "UNKNOWN";
+    const acquirerMsg = tx.response?.acquirerMessage || "No message";
+    const cardBrand = tx.sourceOfFunds?.provided?.card?.brand || "Card";
+    const cardNumber = tx.sourceOfFunds?.provided?.card?.number || "****";
+
     const successCodes = ["APPROVED", "APPROVED_AUTO", "APPROVED_PENDING_SETTLEMENT"];
     const failCodes = [
       "DECLINED",
@@ -130,19 +143,18 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
       "BLOCKED",
       "CANCELLED",
       "FAILED",
+      "ERROR",
     ];
 
     let finalStatus = "FAILED";
     let finalResult = "FAILURE";
 
-    // ✅ If the last transaction actually succeeded
-    if (lastTxResult === "SUCCESS" && successCodes.includes(gatewayCode)) {
+    if (txResult === "SUCCESS" && successCodes.includes(gatewayCode)) {
       finalStatus = "CAPTURED";
       finalResult = "SUCCESS";
     }
 
-    // ✅ If Mastercard top-level shows "FAILED" even if result=SUCCESS
-    if (failCodes.includes(gatewayCode) || lastTxResult === "FAILURE") {
+    if (failCodes.includes(gatewayCode) || txResult === "FAILURE") {
       finalStatus = "FAILED";
       finalResult = "FAILURE";
     }
@@ -156,9 +168,8 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
       status: finalStatus,
       gatewayCode,
       acquirerMessage: acquirerMsg,
-      merchant: data.merchant,
-      totalCapturedAmount: data.totalCapturedAmount,
-      totalAuthorizedAmount: data.totalAuthorizedAmount,
+      cardBrand,
+      cardNumber,
     });
   } catch (err) {
     console.error("❌ Error retrieving order:", err);
