@@ -5,17 +5,23 @@ const cors = require("cors");
 
 const app = express();
 
-// ✅ Allow CORS (required for Safari / Daftra iframe)
+// ✅ Allow CORS from everywhere (required for Safari + Daftra iframe)
 app.use(
   cors({
-    origin: "*",                // You can replace * with "https://www.mrphonelb.com" later for stricter security
+    origin: "*",
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
   })
 );
 
-// ✅ Parse JSON bodies
+// ✅ Parse JSON
 app.use(express.json());
+
+// ✅ Simple logger so you can see requests
+app.use((req, res, next) => {
+  console.log("➡️  " + req.method + " " + req.url);
+  next();
+});
 
 const port = process.env.PORT || 10000;
 
