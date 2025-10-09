@@ -87,20 +87,19 @@ app.post("/initiate-checkout", async (req, res) => {
   }
 });
 
-// ✅ Mastercard Retrieve Order — FINAL version
 app.get("/retrieve-order/:orderId", async (req, res) => {
   const { orderId } = req.params;
-  const merchantId = process.env.MERCHANT_ID;       // e.g. "TEST06263500"
-  const password = process.env.MERCHANT_PASSWORD;   // Your API password
+  const merchantId = process.env.MERCHANT_ID;       // e.g. TEST06263500
+  const apiPassword = process.env.API_PASSWORD;     // your Mastercard API password
 
   try {
     const url = `https://creditlibanais-netcommerce.gateway.mastercard.com/api/rest/version/100/merchant/${merchantId}/order/${orderId}`;
-    const authHeader = "Basic " + Buffer.from(`merchant.${merchantId}:${password}`).toString("base64");
+
+    const auth = "Basic " + Buffer.from(`merchant.${merchantId}:${apiPassword}`).toString("base64");
 
     const response = await fetch(url, {
-      method: "GET",
       headers: {
-        Authorization: authHeader,
+        Authorization: auth,
         "Content-Type": "application/json",
       },
     });
@@ -112,43 +111,14 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
       return res.status(response.status).json({ error: data });
     }
 
-    // ✅ Get latest transaction (last item)
-    const tx = data.transaction?.slice(-1)[0];
-    const gatewayCode = tx?.response?.gatewayCode || "";
-    const acquirerMessage = tx?.response?.acquirerMessage || "";
-    const txResult = tx?.result?.toUpperCase?.() || "";
-    const orderResult = data.result?.toUpperCase?.() || "";
-    const orderStatus = data.status?.toUpperCase?.() || "";
-
-    // ✅ Define which codes mean success
-    const approvedCodes = ["APPROVED", "APPROVED_AUTO", "APPROVED_PENDING_SETTLEMENT"];
-
-    const isSuccessful =
-      (orderResult === "SUCCESS" || txResult === "SUCCESS") &&
-      approvedCodes.includes(gatewayCode);
-
-    // ✅ Normalize response
-    const normalized = {
-      orderId: data.id,
-      amount: data.amount,
-      currency: data.currency,
-      creationTime: data.creationTime,
-      merchant: data.merchant,
-      sourceOfFunds: data.sourceOfFunds,
-      result: isSuccessful ? "SUCCESS" : "FAILURE",
-      status: isSuccessful ? "CAPTURED" : "FAILED",
-      gatewayCode: gatewayCode || "UNKNOWN",
-      acquirerMessage: acquirerMessage || "No message from acquirer",
-      transactionResult: txResult,
-    };
-
-    console.log("✅ Normalized order result:", normalized);
-    res.json(normalized);
+    console.log("✅ Retrieved Mastercard order:", data);
+    res.json(data);
   } catch (err) {
     console.error("❌ Error retrieving order:", err);
     res.status(500).json({ error: "Retrieve failed", details: err.message });
   }
 });
+
 
 
 // ==============================================
