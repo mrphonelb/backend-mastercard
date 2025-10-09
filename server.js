@@ -3,6 +3,11 @@ const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 
+
+// 🧠 Store full customer info temporarily (for Daftra invoice later)
+const customerCache = new Map();
+
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -17,7 +22,7 @@ app.get("/", (req, res) => {
 });
 
 // ==============================================
-// ✅ INITIATE CHECKOUT (FINAL FIXED)
+// ✅ INITIATE CHECKOUT (Final Fixed)
 // ==============================================
 app.post("/initiate-checkout", async (req, res) => {
   const { amount, currency, draftId, description, customer } = req.body;
@@ -26,7 +31,10 @@ app.post("/initiate-checkout", async (req, res) => {
   try {
     console.log("🧾 Incoming payment data:", req.body);
 
-    // ✅ Only include allowed fields for Mastercard (flat structure)
+    // ✅ Save full customer info for later (for Daftra invoice)
+    customerCache.set(orderId, customer);
+
+    // ✅ Only allowed fields for Mastercard
     const safeCustomer = {
       email: customer?.email || "",
       firstName: customer?.firstName || "",
@@ -64,17 +72,6 @@ app.post("/initiate-checkout", async (req, res) => {
           description: description || `Draft Order #${orderId} - Mr. Phone Lebanon`,
         },
         customer: safeCustomer, // ✅ Mastercard-compliant fields only
-
-        // 💾 Keep full shipping info (for Daftra invoice later)
-        metadata: {
-          shipping: {
-            governorate: customer?.governorate || "",
-            district: customer?.district || "",
-            city: customer?.city || "",
-            email: customer?.email || "",
-            phone: customer?.phone || "",
-          },
-        },
       },
       {
         auth: {
@@ -95,6 +92,7 @@ app.post("/initiate-checkout", async (req, res) => {
     });
   }
 });
+
 
 
 
@@ -126,6 +124,8 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
         amount: orderData.amount,
         currency: orderData.currency,
         cardType: orderData.sourceOfFunds?.provided?.card?.brand || "Card",
+        customer: customerCache.get(orderId) || orderData.customer || {},
+
       });
     }
 
