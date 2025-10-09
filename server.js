@@ -3,10 +3,8 @@ const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 
-
-// 🧠 Store full customer info temporarily (for Daftra invoice later)
+// 🧠 Cache customer info for later Daftra invoice
 const customerCache = new Map();
-
 
 const app = express();
 app.use(cors());
@@ -22,7 +20,7 @@ app.get("/", (req, res) => {
 });
 
 // ==============================================
-// ✅ INITIATE CHECKOUT (Final Fixed)
+// ✅ INITIATE CHECKOUT
 // ==============================================
 app.post("/initiate-checkout", async (req, res) => {
   const { amount, currency, draftId, description, customer } = req.body;
@@ -31,10 +29,10 @@ app.post("/initiate-checkout", async (req, res) => {
   try {
     console.log("🧾 Incoming payment data:", req.body);
 
-    // ✅ Save full customer info for later (for Daftra invoice)
+    // ✅ Save customer info for later Daftra use
     customerCache.set(orderId, customer);
 
-    // ✅ Only allowed fields for Mastercard
+    // ✅ Allowed fields only for Mastercard
     const safeCustomer = {
       email: customer?.email || "",
       firstName: customer?.firstName || "",
@@ -42,6 +40,7 @@ app.post("/initiate-checkout", async (req, res) => {
       mobilePhone: customer?.phone || "",
     };
 
+    // ✅ Create Mastercard session
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
@@ -52,8 +51,7 @@ app.post("/initiate-checkout", async (req, res) => {
           locale: "en_US",
           merchant: {
             name: "Mr. Phone Lebanon",
-            logo:
-              "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
             url: "https://www.mrphonelb.com",
           },
           displayControl: {
@@ -71,7 +69,7 @@ app.post("/initiate-checkout", async (req, res) => {
           currency,
           description: description || `Draft Order #${orderId} - Mr. Phone Lebanon`,
         },
-        customer: safeCustomer, // ✅ Mastercard-compliant fields only
+        customer: safeCustomer,
       },
       {
         auth: {
@@ -93,11 +91,8 @@ app.post("/initiate-checkout", async (req, res) => {
   }
 });
 
-
-
-
 // ==============================================
-// ✅ RETRIEVE ORDER & CREATE DAFTRA INVOICE
+// ✅ RETRIEVE ORDER & CONVERT DAFTRA DRAFT
 // ==============================================
 app.get("/retrieve-order/:orderId", async (req, res) => {
   const { orderId } = req.params;
@@ -117,15 +112,14 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
     const orderData = response.data;
     console.log(`✅ Retrieved order ${orderId}:`, orderData);
 
-    // ✅ If payment succeeded, convert Daftra draft into paid invoice
+    // ✅ If payment succeeded → convert Daftra draft
     if (orderData.result === "SUCCESS" && orderData.status === "CAPTURED") {
-      await createDaftraInvoiceFromDraft({
+      await convertDaftraDraftToPaid({
         orderId,
         amount: orderData.amount,
         currency: orderData.currency,
         cardType: orderData.sourceOfFunds?.provided?.card?.brand || "Card",
         customer: customerCache.get(orderId) || orderData.customer || {},
-
       });
     }
 
@@ -140,75 +134,33 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
 });
 
 // ==============================================
-// ✅ CREATE FINAL INVOICE IN DAFTRA FROM DRAFT
+// ✅ CONVERT EXISTING DAFTRA DRAFT TO PAID INVOICE
 // ==============================================
-async function createDaftraInvoiceFromDraft(order) {
+async function convertDaftraDraftToPaid(order) {
   const draftId = order.orderId;
+  const c = order.customer || {};
   console.log(`🧾 Converting Draft #${draftId} into Paid Invoice...`);
 
   try {
-    // ✅ Get draft details (includes client & shipping info)
-    const draftRes = await axios.get(`${process.env.DAFTRA_DOMAIN}/api2/invoices/${draftId}`, {
-      headers: {
-        "Accept": "application/json",
-        "apikey": process.env.DAFTRA_API_KEY,
-      },
-    });
-
-    const draft = draftRes.data?.Invoice;
-    if (!draft) {
-      console.error("❌ Could not fetch draft invoice from Daftra");
-      return;
-    }
-
-    const clientId = draft.client_id;
-    if (!clientId) {
-      console.error("❌ Draft invoice missing client_id");
-      return;
-    }
-
-    // ✅ Extract shipping info from the draft (if available)
-    const {
-      client_first_name,
-      client_last_name,
-      client_email,
-      client_phone,
-      client_address1,
-      client_city,
-      client_state,
-    } = draft;
-
-    // ✅ Build shipping summary text
-    const shippingSummary = `
-      Shipping Information:
-      Name: ${client_first_name || ""} ${client_last_name || ""}
-      Governorate: ${client_state || ""}
-      City: ${client_city || ""}
-      Address: ${client_address1 || ""}
-      Phone: ${client_phone || ""}
-      Email: ${client_email || ""}
+    // ✅ Build full shipping info text
+    const shippingDetails = `
+    Shipping Information:
+    - Name: ${c.firstName || ""} ${c.lastName || ""}
+    - Governorate: ${c.governorate || ""}
+    - District: ${c.district || ""}
+    - City: ${c.city || ""}
+    - Email: ${c.email || ""}
+    - Phone: ${c.phone || ""}
     `.trim();
 
-    // ✅ Create new paid invoice
-    const invoiceRes = await axios.post(
-      `${process.env.DAFTRA_DOMAIN}/api2/invoices`,
+    // ✅ Convert Daftra draft → final paid invoice
+    const convertRes = await axios.post(
+      `${process.env.DAFTRA_DOMAIN}/api2/invoices/${draftId}/convert`,
       {
         Invoice: {
-          name: `Online Payment for Draft #${draftId}`,
           draft: false,
-          client_id: clientId,
-          currency_code: order.currency || "USD",
-          date: new Date().toISOString().split("T")[0],
-          notes: `Paid online via Mastercard (${order.cardType || "Card"})\n\n${shippingSummary}`,
+          notes: `Paid online via Mastercard (${order.cardType || "Card"})\n\n${shippingDetails}`,
         },
-        InvoiceItem: [
-          {
-            item: "Online Purchase",
-            description: `Payment for Draft #${draftId}`,
-            unit_price: parseFloat(order.amount),
-            quantity: 1,
-          },
-        ],
         Payment: [
           {
             payment_method: "Credit/Debit Card",
@@ -227,10 +179,10 @@ async function createDaftraInvoiceFromDraft(order) {
       }
     );
 
-    console.log("✅ Final Daftra Invoice Created:", invoiceRes.data);
-    return invoiceRes.data;
+    console.log("✅ Draft converted successfully:", convertRes.data);
+    return convertRes.data;
   } catch (error) {
-    console.error("❌ Error creating Daftra invoice:", error.response?.data || error.message);
+    console.error("❌ Error converting Daftra draft:", error.response?.data || error.message);
     return null;
   }
 }
