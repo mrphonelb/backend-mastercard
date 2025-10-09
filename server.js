@@ -90,53 +90,51 @@ app.post("/initiate-checkout", async (req, res) => {
 // ✅ Mastercard Retrieve Order
 app.get("/retrieve-order/:orderId", async (req, res) => {
   const { orderId } = req.params;
-  const merchantId = process.env.MERCHANT_ID; // e.g. "TEST06263500"
-  const password = process.env.MERCHANT_PASSWORD; // your API password
+  const merchantId = process.env.MERCHANT_ID; // e.g. TEST06263500
+  const password = process.env.MERCHANT_PASSWORD;
 
   try {
-    const response = await fetch(
-      `https://creditlibanais-netcommerce.gateway.mastercard.com/api/rest/version/100/merchant/${merchantId}/order/${orderId}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization:
-            "Basic " + Buffer.from(`merchant.${merchantId}:${password}`).toString("base64"),
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const url = `https://creditlibanais-netcommerce.gateway.mastercard.com/api/rest/version/100/merchant/${merchantId}/order/${orderId}`;
+    const auth = "Basic " + Buffer.from(`merchant.${merchantId}:${password}`).toString("base64");
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: auth, "Content-Type": "application/json" },
+    });
 
     const data = await response.json();
-
     if (!response.ok) {
-      console.error("❌ Retrieve order failed:", data);
+      console.error("❌ Retrieve failed:", data);
       return res.status(response.status).json({ error: data });
     }
 
-    // ✅ Extract key info
-    const orderResult = {
-      id: data.id,
+    // ✅ Get the latest transaction (final status)
+    const tx = data.transaction?.slice(-1)[0];
+    const gatewayCode = tx?.response?.gatewayCode || "";
+    const acquirerMessage = tx?.response?.acquirerMessage || "";
+    const txResult = tx?.result || data.result;
+
+    // ✅ Determine overall success/failure
+    const isSuccess =
+      (txResult?.toUpperCase() === "SUCCESS" || data.result?.toUpperCase() === "SUCCESS") &&
+      ["APPROVED", "APPROVED_AUTO", "APPROVED_PENDING_SETTLEMENT"].includes(gatewayCode);
+
+    // ✅ Return a clean normalized object
+    res.json({
+      orderId: data.id,
       amount: data.amount,
       currency: data.currency,
-      result: data.result,
-      status: data.status,
       creationTime: data.creationTime,
       sourceOfFunds: data.sourceOfFunds,
-      transaction: data.transaction || [],
-    };
-
-    // 🧠 Add shorthand info from latest transaction
-    const tx = data.transaction?.slice(-1)[0];
-    if (tx) {
-      orderResult.gatewayCode = tx.response?.gatewayCode;
-      orderResult.acquirerMessage = tx.response?.acquirerMessage;
-      orderResult.transactionResult = tx.result;
-    }
-
-    res.json(orderResult);
-  } catch (error) {
-    console.error("❌ Error retrieving order:", error);
-    res.status(500).json({ error: "Retrieve failed", details: error.message });
+      status: isSuccess ? "CAPTURED" : "FAILED",
+      result: isSuccess ? "SUCCESS" : "FAILURE",
+      gatewayCode,
+      acquirerMessage: acquirerMessage || gatewayCode || "Unknown",
+      transactionResult: txResult,
+    });
+  } catch (err) {
+    console.error("❌ Error retrieving order:", err);
+    res.status(500).json({ error: "Retrieve failed", details: err.message });
   }
 });
 
