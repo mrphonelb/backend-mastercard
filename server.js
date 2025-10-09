@@ -5,16 +5,18 @@ const cors = require("cors");
 
 const app = express();
 
-// ✅ Allow CORS from everywhere (required for Safari + Daftra iframe)
+/* ✅ FIXED CORS CONFIG */
 app.use(
   cors({
-    origin: "*",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type"],
+    origin: "*", // allow all origins (safe for this payment flow)
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// ✅ Parse JSON
+// ✅ Handle preflight OPTIONS requests
+app.options("*", cors());
+
 app.use(express.json());
 
 // ✅ Simple logger so you can see requests
