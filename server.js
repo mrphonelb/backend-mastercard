@@ -101,33 +101,37 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
     });
 
     const data = await response.json();
-
     if (!response.ok) {
       console.error("❌ Retrieve failed:", data);
       return res.status(response.status).json({ error: data });
     }
 
-    // ✅ Get all transactions
-    const transactions = Array.isArray(data.transaction) ? data.transaction : [];
+    // ✅ All transactions
+    const txs = Array.isArray(data.transaction) ? data.transaction : [];
 
-    // ✅ Focus only on payment or authorization transactions
-    const paymentTx = transactions
-      .filter(
-        (t) =>
-          t.transaction?.type === "PAYMENT" ||
-          t.transaction?.type === "AUTHORIZATION" ||
-          t.transaction?.type === "CAPTURE"
+    // ✅ Get the last *money-moving* transaction (PAYMENT, AUTHORIZATION, CAPTURE)
+    const validTxs = txs.filter(t =>
+      ["PAYMENT", "AUTHORIZATION", "CAPTURE"].includes(t.transaction?.type)
+    );
+    const tx = validTxs[validTxs.length - 1] || txs[txs.length - 1] || {};
+
+    // ✅ Fallback: find any transaction whose gatewayCode indicates failure
+    const failureTx = txs.reverse().find(t =>
+      /(DECLINED|EXPIRED_CARD|TIMED_OUT|UNSPECIFIED_FAILURE|ACQUIRER_SYSTEM_ERROR)/i.test(
+        t.response?.gatewayCode || ""
       )
-      .pop(); // get the latest one
+    );
 
-    const tx = paymentTx || transactions[transactions.length - 1] || {};
+    // ✅ Prefer failureTx if it exists
+    const finalTx = failureTx || tx;
 
-    const txResult = tx.result?.toUpperCase() || "UNKNOWN";
-    const gatewayCode = tx.response?.gatewayCode?.toUpperCase() || "UNKNOWN";
-    const acquirerMsg = tx.response?.acquirerMessage || "No message";
-    const cardBrand = tx.sourceOfFunds?.provided?.card?.brand || "Card";
-    const cardNumber = tx.sourceOfFunds?.provided?.card?.number || "****";
+    const gatewayCode = finalTx.response?.gatewayCode?.toUpperCase() || "UNKNOWN";
+    const acquirerMessage = finalTx.response?.acquirerMessage || "No message";
+    const txResult = finalTx.result?.toUpperCase() || "UNKNOWN";
+    const cardBrand = finalTx.sourceOfFunds?.provided?.card?.brand || "Card";
+    const cardNumber = finalTx.sourceOfFunds?.provided?.card?.number || "****";
 
+    // ✅ Decision matrix
     const successCodes = ["APPROVED", "APPROVED_AUTO", "APPROVED_PENDING_SETTLEMENT"];
     const failCodes = [
       "DECLINED",
@@ -167,7 +171,7 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
       result: finalResult,
       status: finalStatus,
       gatewayCode,
-      acquirerMessage: acquirerMsg,
+      acquirerMessage,
       cardBrand,
       cardNumber,
     });
