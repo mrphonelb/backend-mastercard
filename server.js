@@ -134,12 +134,12 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
 });
 
 // ==============================================
-// ✅ CONVERT EXISTING DAFTRA DRAFT TO PAID INVOICE
+// ✅ UPDATE EXISTING DAFTRA DRAFT → MARK AS PAID
 // ==============================================
 async function convertDaftraDraftToPaid(order) {
   const draftId = order.orderId;
   const c = order.customer || {};
-  console.log(`🧾 Converting Draft #${draftId} into Paid Invoice...`);
+  console.log(`🧾 Updating Draft #${draftId} to Paid Invoice...`);
 
   try {
     // ✅ Build full shipping info text
@@ -153,12 +153,12 @@ async function convertDaftraDraftToPaid(order) {
     - Phone: ${c.phone || ""}
     `.trim();
 
-    // ✅ Convert Daftra draft → final paid invoice
-    const convertRes = await axios.post(
-      `${process.env.DAFTRA_DOMAIN}/api2/invoices/${draftId}/convert`,
+    // ✅ Mark existing draft as final + paid
+    const updateRes = await axios.put(
+      `${process.env.DAFTRA_DOMAIN}/api2/invoices/${draftId}`,
       {
         Invoice: {
-          draft: false,
+          draft: false, // ✅ Mark as final
           notes: `Paid online via Mastercard (${order.cardType || "Card"})\n\n${shippingDetails}`,
         },
         Payment: [
@@ -179,13 +179,14 @@ async function convertDaftraDraftToPaid(order) {
       }
     );
 
-    console.log("✅ Draft converted successfully:", convertRes.data);
-    return convertRes.data;
+    console.log("✅ Draft updated successfully:", updateRes.data);
+    return updateRes.data;
   } catch (error) {
-    console.error("❌ Error converting Daftra draft:", error.response?.data || error.message);
+    console.error("❌ Error updating Daftra draft:", error.response?.data || error.message);
     return null;
   }
 }
+
 
 // ==============================================
 // ✅ START SERVER
