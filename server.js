@@ -20,14 +20,13 @@ app.get("/", (req, res) => {
 // ✅ INITIATE CHECKOUT (Simplified Final Version)
 // ==============================================
 app.post("/initiate-checkout", async (req, res) => {
-  const { amount, currency, draftId, orderId: frontendOrderId, description, customer } = req.body;
-
-  // ✅ If Daftra draftId not yet available, use frontend-generated or timestamp fallback
-  const orderId = draftId || frontendOrderId || `PRE${Date.now()}`;
+  const { amount, currency, draftId, description, customer } = req.body;
+  const orderId = draftId; // use Daftra draft ID as Mastercard order ID
 
   try {
     console.log("🧾 Incoming payment data:", req.body);
 
+    // ✅ Build request to Mastercard API
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
@@ -52,11 +51,12 @@ app.post("/initiate-checkout", async (req, res) => {
           retryAttemptCount: 2,
         },
         order: {
-          id: orderId, // ✅ always defined now
+          id: orderId,
           amount,
           currency,
           description: description || `Draft Order #${orderId} - Mr. Phone Lebanon`,
         },
+        // ✅ Optional customer info (non-sensitive)
         customer: {
           email: customer?.email || "",
           firstName: customer?.firstName || "",
@@ -86,7 +86,6 @@ app.post("/initiate-checkout", async (req, res) => {
     });
   }
 });
-
 
 app.get("/retrieve-order/:orderId", async (req, res) => {
   const { orderId } = req.params;
