@@ -5,37 +5,38 @@ const cors = require("cors");
 
 const app = express();
 
-// ✅ Allow CORS from anywhere (fixes Safari iframe issues)
+// ✅ Allow CORS (required for Safari / Daftra iframe)
 app.use(
   cors({
-    origin: "*", // or "https://www.mrphonelb.com"
+    origin: "*",                // You can replace * with "https://www.mrphonelb.com" later for stricter security
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
   })
 );
 
-// ✅ Parse JSON request bodies (this is essential for POST)
+// ✅ Parse JSON bodies
 app.use(express.json());
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
-/* ===========================================
+/* ====================================================
    🧠 Health Check
-   =========================================== */
+   ==================================================== */
 app.get("/", (req, res) => {
-  res.send("✅ Backend is running!");
+  res.send("✅ MrPhone Backend is running and ready for Mastercard Hosted Checkout!");
 });
 
-/* ===========================================
-   💳 INITIATE CHECKOUT (POST endpoint)
-   =========================================== */
+/* ====================================================
+   💳 INITIATE CHECKOUT
+   ==================================================== */
 app.post("/initiate-checkout", async (req, res) => {
+  const { amount, currency, draftId, description, customer } = req.body;
+  const orderId = draftId || "0000";
+
   try {
-    const { amount, currency, draftId, description, customer } = req.body;
+    console.log("🧾 Received checkout request:", req.body);
 
-    // 🧾 Log what frontend sends
-    console.log("Received checkout:", req.body);
-
+    // Build Mastercard session request
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
@@ -46,8 +47,7 @@ app.post("/initiate-checkout", async (req, res) => {
           locale: "en_US",
           merchant: {
             name: "Mr. Phone Lebanon",
-            logo:
-              "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
             url: "https://www.mrphonelb.com",
           },
           displayControl: {
@@ -55,20 +55,21 @@ app.post("/initiate-checkout", async (req, res) => {
             customerEmail: "HIDE",
             shipping: "HIDE",
           },
-          returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?order_id=${draftId}`,
-          redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?order_id=${draftId}`,
+          returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?order_id=${orderId}`,
+          redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?order_id=${orderId}`,
+          retryAttemptCount: 2,
         },
         order: {
-          id: draftId,
+          id: orderId,
           amount,
           currency,
-          description: description || `Draft Order #${draftId}`,
+          description: description || `Draft Order #${orderId} - Mr. Phone Lebanon`,
         },
         customer: {
-          email: customer?.email || "",
-          firstName: customer?.firstName || "",
-          lastName: customer?.lastName || "",
-          mobilePhone: customer?.phone || "",
+          firstName: customer?.firstName || "Guest",
+          lastName: customer?.lastName || "Customer",
+          email: customer?.email || "guest@mrphonelb.com",
+          mobilePhone: customer?.phone || "00000000",
         },
       },
       {
@@ -80,14 +81,17 @@ app.post("/initiate-checkout", async (req, res) => {
       }
     );
 
-    // ✅ Return Mastercard session info
+    console.log("✅ Mastercard session created:", response.data);
     res.json(response.data);
-  } catch (err) {
-    console.error("❌ Error initiating checkout:", err.message);
-    res.status(500).json({ error: "Failed to initiate checkout", details: err.message });
+  } catch (error) {
+    console.error("❌ Error from Mastercard API:");
+    if (error.response) console.error(error.response.data);
+    res.status(500).json({
+      error: "Failed to initiate checkout",
+      details: error.response ? error.response.data : error.message,
+    });
   }
 });
-
 
 app.get("/retrieve-order/:orderId", async (req, res) => {
   const { orderId } = req.params;
