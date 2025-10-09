@@ -87,46 +87,56 @@ app.post("/initiate-checkout", async (req, res) => {
   }
 });
 
-// ==============================================
-// ✅ RETRIEVE ORDER STATUS (for .NetCommerce Verification)
-// ==============================================
+// ✅ Mastercard Retrieve Order
 app.get("/retrieve-order/:orderId", async (req, res) => {
   const { orderId } = req.params;
-
-  console.log(`🔍 Verifying payment for order ${orderId}...`);
+  const merchantId = process.env.MERCHANT_ID; // e.g. "TEST06263500"
+  const password = process.env.MERCHANT_PASSWORD; // your API password
 
   try {
-    // Call Mastercard API to retrieve order details
-    const response = await axios.get(
-      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
+    const response = await fetch(
+      `https://creditlibanais-netcommerce.gateway.mastercard.com/api/rest/version/100/merchant/${merchantId}/order/${orderId}`,
       {
-        auth: {
-          username: `merchant.${process.env.MERCHANT_ID}`,
-          password: process.env.API_PASSWORD,
+        method: "GET",
+        headers: {
+          Authorization:
+            "Basic " + Buffer.from(`merchant.${merchantId}:${password}`).toString("base64"),
+          "Content-Type": "application/json",
         },
-        headers: { "Content-Type": "application/json" },
       }
     );
 
-    const orderData = response.data;
-    console.log(`✅ Retrieved order ${orderId}:`, orderData);
+    const data = await response.json();
 
-    // Return payment result to frontend
-    res.json({
-      orderId,
-      result: orderData.result,
-      status: orderData.status,
-      amount: orderData.amount,
-      currency: orderData.currency,
-      cardType: orderData.sourceOfFunds?.provided?.card?.brand || "Card",
-      transactionTime: orderData.lastUpdatedTime,
-    });
+    if (!response.ok) {
+      console.error("❌ Retrieve order failed:", data);
+      return res.status(response.status).json({ error: data });
+    }
+
+    // ✅ Extract key info
+    const orderResult = {
+      id: data.id,
+      amount: data.amount,
+      currency: data.currency,
+      result: data.result,
+      status: data.status,
+      creationTime: data.creationTime,
+      sourceOfFunds: data.sourceOfFunds,
+      transaction: data.transaction || [],
+    };
+
+    // 🧠 Add shorthand info from latest transaction
+    const tx = data.transaction?.slice(-1)[0];
+    if (tx) {
+      orderResult.gatewayCode = tx.response?.gatewayCode;
+      orderResult.acquirerMessage = tx.response?.acquirerMessage;
+      orderResult.transactionResult = tx.result;
+    }
+
+    res.json(orderResult);
   } catch (error) {
-    console.error("❌ Error retrieving order:", error.response?.data || error.message);
-    res.status(500).json({
-      error: "Failed to verify order",
-      details: error.response?.data || error.message,
-    });
+    console.error("❌ Error retrieving order:", error);
+    res.status(500).json({ error: "Retrieve failed", details: error.message });
   }
 });
 
