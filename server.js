@@ -134,12 +134,12 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
 });
 
 // ==============================================
-// ✅ UPDATE EXISTING DAFTRA DRAFT → MARK AS PAID
+// ✅ MARK EXISTING DAFTRA DRAFT AS PAID (FINAL)
 // ==============================================
 async function convertDaftraDraftToPaid(order) {
   const draftId = order.orderId;
   const c = order.customer || {};
-  console.log(`🧾 Updating Draft #${draftId} to Paid Invoice...`);
+  console.log(`🧾 Marking Daftra Draft #${draftId} as Paid...`);
 
   try {
     // ✅ Build full shipping info text
@@ -153,12 +153,12 @@ async function convertDaftraDraftToPaid(order) {
     - Phone: ${c.phone || ""}
     `.trim();
 
-    // ✅ Mark existing draft as final + paid
-    const updateRes = await axios.put(
+    // ✅ POST update to Daftra (Daftra API uses POST for updates)
+    const updateRes = await axios.post(
       `${process.env.DAFTRA_DOMAIN}/api2/invoices/${draftId}`,
       {
         Invoice: {
-          draft: false, // ✅ Mark as final
+          draft: false, // ✅ mark as final invoice
           notes: `Paid online via Mastercard (${order.cardType || "Card"})\n\n${shippingDetails}`,
         },
         Payment: [
@@ -173,8 +173,8 @@ async function convertDaftraDraftToPaid(order) {
       {
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
-          "apikey": process.env.DAFTRA_API_KEY,
+          Accept: "application/json",
+          apikey: process.env.DAFTRA_API_KEY,
         },
       }
     );
