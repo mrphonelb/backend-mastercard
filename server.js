@@ -25,7 +25,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const port = process.env.PORT || 10000;
+const port = process.env.PORT || 3000;
 
 /* ====================================================
    🧠 Health Check
