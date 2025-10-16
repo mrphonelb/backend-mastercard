@@ -197,6 +197,58 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
 
 
 
+/* ==========================================================
+   ✅ PAYMENT SUCCESS
+   Called by Mastercard after successful payment
+   - Converts Daftra draft → final invoice
+   - Adds payment record automatically
+   - Redirects to thank-you page
+========================================================== */
+app.get("/payment-success", async (req, res) => {
+  const { draftId } = req.query;
+  console.log(`💳 Mastercard success callback for draft ${draftId}`);
+
+  try {
+    // 1️⃣ Convert draft → final invoice
+    await axios.put(
+      `https://www.mrphonelb.com/api2/invoices/${draftId}`,
+      { status: "final" },
+      {
+        headers: {
+          Authorization: `APIKEY ${process.env.DAFTRA_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    console.log(`✅ Invoice ${draftId} finalized.`);
+
+    // 2️⃣ Add payment record
+    await axios.post(
+      "https://www.mrphonelb.com/api2/invoice_payments",
+      {
+        invoice_id: draftId,
+        amount: "FULL",
+        payment_method: "Credit Card",
+        note: "Auto-confirmed via Mastercard .NetCommerce",
+      },
+      {
+        headers: {
+          Authorization: `APIKEY ${process.env.DAFTRA_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    console.log(`✅ Payment recorded for invoice ${draftId}`);
+
+    // 3️⃣ Redirect user to thank-you page
+    res.redirect(`https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${draftId}`);
+  } catch (error) {
+    console.error("❌ Error updating Daftra:", error.response?.data || error.message);
+    res.redirect(`https://www.mrphonelb.com/client/contents/error?invoice_id=${draftId}`);
+  }
+});
+
+
 // ==============================================
 // ✅ START SERVER
 // ==============================================
