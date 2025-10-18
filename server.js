@@ -5,18 +5,20 @@ const cors = require("cors");
 
 const app = express();
 
-/* ====================================================
-   ✅ CORS & BASIC SETUP
-   ==================================================== */
+/* ============================================================
+   ✅ CORS CONFIGURATION — allow Daftra domain only
+   ============================================================ */
 app.use(
   cors({
-    origin: ["https://www.mrphonelb.com"], // allow only your domain
+    origin: [
+      "https://www.mrphonelb.com", // your live Daftra website
+      "https://mrphonelb.com",
+    ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-
-app.options(/.*/, cors());
+app.options("*", cors());
 app.use(express.json());
 
 app.use((req, res, next) => {
@@ -26,29 +28,29 @@ app.use((req, res, next) => {
 
 const port = process.env.PORT || 3000;
 
-/* ====================================================
+/* ============================================================
    🧠 HEALTH CHECK
-   ==================================================== */
+   ============================================================ */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend is running for Mastercard Embedded Checkout!");
+  res.send("✅ MrPhone Backend is running and ready for Mastercard Hosted Checkout!");
 });
 
-/* ====================================================
-   💳 INITIATE CHECKOUT — Creates a Mastercard Session
-   ==================================================== */
+/* ============================================================
+   💳 INITIATE CHECKOUT — create Mastercard payment session
+   ============================================================ */
 app.post("/initiate-checkout", async (req, res) => {
   const { amount, currency = "USD", draftId, description, customer } = req.body;
   const orderId = draftId || `ORDER-${Date.now()}`;
 
   try {
-    console.log("🧾 Creating session for order:", orderId);
+    console.log("🧾 Creating Mastercard session for order:", orderId);
 
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
         apiOperation: "INITIATE_CHECKOUT",
         interaction: {
-          operation: "PURCHASE", // or "AUTHORIZE" if you want later capture
+          operation: "PURCHASE",
           merchant: {
             name: "Mr. Phone Lebanon",
             url: "https://www.mrphonelb.com",
@@ -67,7 +69,7 @@ app.post("/initiate-checkout", async (req, res) => {
           id: orderId,
           amount,
           currency,
-          description: description || `Order #${orderId} - Mr. Phone Lebanon`,
+          description: description || `Checkout Order #${orderId} - Mr. Phone Lebanon`,
         },
         customer: {
           firstName: customer?.firstName || "Guest",
@@ -101,9 +103,9 @@ app.post("/initiate-checkout", async (req, res) => {
   }
 });
 
-/* ====================================================
-   🧾 RETRIEVE ORDER — Verify Payment Status
-   ==================================================== */
+/* ============================================================
+   🧾 RETRIEVE ORDER STATUS — verify payment result (optional)
+   ============================================================ */
 app.get("/retrieve-order/:orderId", async (req, res) => {
   const { orderId } = req.params;
 
@@ -120,16 +122,13 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
     );
 
     const data = response.data;
-    const result = data.result?.toUpperCase() || "UNKNOWN";
-    const gatewayCode = data.response?.gatewayCode?.toUpperCase() || "UNKNOWN";
-
     res.json({
       orderId: data.id,
       amount: data.amount,
       currency: data.currency,
-      result,
-      gatewayCode,
+      result: data.result || "UNKNOWN",
       status: data.status || "UNKNOWN",
+      gatewayCode: data.response?.gatewayCode || "NONE",
     });
   } catch (error) {
     console.error("❌ Retrieve Order Error:", error.response?.data || error.message);
@@ -140,9 +139,9 @@ app.get("/retrieve-order/:orderId", async (req, res) => {
   }
 });
 
-/* ====================================================
+/* ============================================================
    🚀 START SERVER
-   ==================================================== */
+   ============================================================ */
 app.listen(port, () => {
   console.log(`✅ Server running on http://localhost:${port}`);
 });
