@@ -5,73 +5,69 @@ const cors = require("cors");
 
 const app = express();
 
-/* ✅ FIXED CORS CONFIG */
+/* ====================================================
+   ✅ CORS & BASIC SETUP
+   ==================================================== */
 app.use(
   cors({
-    origin: "*", // allow all origins (safe for this payment flow)
+    origin: ["https://www.mrphonelb.com"], // allow only your domain
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// ✅ Handle preflight OPTIONS requests
-app.options(/.*/, cors());
-
+app.options("*", cors());
 app.use(express.json());
 
-// ✅ Simple logger so you can see requests
 app.use((req, res, next) => {
-  console.log("➡️  " + req.method + " " + req.url);
+  console.log(`➡️ ${req.method} ${req.url}`);
   next();
 });
 
 const port = process.env.PORT || 3000;
 
 /* ====================================================
-   🧠 Health Check
+   🧠 HEALTH CHECK
    ==================================================== */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend is running and ready for Mastercard Hosted Checkout!");
+  res.send("✅ MrPhone Backend is running for Mastercard Embedded Checkout!");
 });
 
 /* ====================================================
-   💳 INITIATE CHECKOUT
+   💳 INITIATE CHECKOUT — Creates a Mastercard Session
    ==================================================== */
 app.post("/initiate-checkout", async (req, res) => {
-  const { amount, currency, draftId, description, customer } = req.body;
-  const orderId = draftId || "0000";
+  const { amount, currency = "USD", draftId, description, customer } = req.body;
+  const orderId = draftId || `ORDER-${Date.now()}`;
 
   try {
-    console.log("🧾 Received checkout request:", req.body);
+    console.log("🧾 Creating session for order:", orderId);
 
-    // Build Mastercard session request
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
         apiOperation: "INITIATE_CHECKOUT",
-        checkoutMode: "WEBSITE",
         interaction: {
-          operation: "PURCHASE",
-          locale: "en_US",
+          operation: "PURCHASE", // or "AUTHORIZE" if you want later capture
           merchant: {
             name: "Mr. Phone Lebanon",
-            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
             url: "https://www.mrphonelb.com",
+            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
+          locale: "en_US",
+          returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${orderId}`,
+          cancelUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${orderId}`,
           displayControl: {
             billingAddress: "HIDE",
-            customerEmail: "HIDE",
             shipping: "HIDE",
+            customerEmail: "HIDE",
           },
-          returnUrl: `https://www.mrphonelb.com/client/contents/thankyou?order_id=${orderId}`,
-          redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?order_id=${orderId}`,
-          retryAttemptCount: 2,
         },
         order: {
           id: orderId,
           amount,
           currency,
-          description: description || `Draft Order #${orderId} - Mr. Phone Lebanon`,
+          description: description || `Order #${orderId} - Mr. Phone Lebanon`,
         },
         customer: {
           firstName: customer?.firstName || "Guest",
@@ -89,169 +85,64 @@ app.post("/initiate-checkout", async (req, res) => {
       }
     );
 
-    console.log("✅ Mastercard session created:", response.data);
-    res.json(response.data);
+    console.log("✅ Mastercard session created:", response.data.session.id);
+
+    res.json({
+      sessionId: response.data.session.id,
+      successIndicator: response.data.successIndicator,
+      orderId,
+    });
   } catch (error) {
-    console.error("❌ Error from Mastercard API:");
-    if (error.response) console.error(error.response.data);
+    console.error("❌ INITIATE_CHECKOUT failed:", error.response?.data || error.message);
     res.status(500).json({
-      error: "Failed to initiate checkout",
-      details: error.response ? error.response.data : error.message,
+      error: "Failed to create Mastercard session",
+      details: error.response?.data || error.message,
     });
   }
 });
 
+/* ====================================================
+   🧾 RETRIEVE ORDER — Verify Payment Status
+   ==================================================== */
 app.get("/retrieve-order/:orderId", async (req, res) => {
   const { orderId } = req.params;
-  const merchantId = process.env.MERCHANT_ID;
-  const apiPassword = process.env.API_PASSWORD;
 
   try {
-    const url = `https://creditlibanais-netcommerce.gateway.mastercard.com/api/rest/version/100/merchant/${merchantId}/order/${orderId}`;
-    const auth = "Basic " + Buffer.from(`merchant.${merchantId}:${apiPassword}`).toString("base64");
-
-    const response = await fetch(url, {
-      headers: { Authorization: auth, "Content-Type": "application/json" },
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      console.error("❌ Retrieve failed:", data);
-      return res.status(response.status).json({ error: data });
-    }
-
-    // ✅ All transactions
-    const txs = Array.isArray(data.transaction) ? data.transaction : [];
-
-    // ✅ Get the last *money-moving* transaction (PAYMENT, AUTHORIZATION, CAPTURE)
-    const validTxs = txs.filter(t =>
-      ["PAYMENT", "AUTHORIZATION", "CAPTURE"].includes(t.transaction?.type)
-    );
-    const tx = validTxs[validTxs.length - 1] || txs[txs.length - 1] || {};
-
-    // ✅ Fallback: find any transaction whose gatewayCode indicates failure
-    const failureTx = txs.reverse().find(t =>
-      /(DECLINED|EXPIRED_CARD|TIMED_OUT|UNSPECIFIED_FAILURE|ACQUIRER_SYSTEM_ERROR)/i.test(
-        t.response?.gatewayCode || ""
-      )
+    const response = await axios.get(
+      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
+      {
+        auth: {
+          username: `merchant.${process.env.MERCHANT_ID}`,
+          password: process.env.API_PASSWORD,
+        },
+        headers: { "Content-Type": "application/json" },
+      }
     );
 
-    // ✅ Prefer failureTx if it exists
-    const finalTx = failureTx || tx;
-
-    const gatewayCode = finalTx.response?.gatewayCode?.toUpperCase() || "UNKNOWN";
-    const acquirerMessage = finalTx.response?.acquirerMessage || "No message";
-    const txResult = finalTx.result?.toUpperCase() || "UNKNOWN";
-    const cardBrand = finalTx.sourceOfFunds?.provided?.card?.brand || "Card";
-    const cardNumber = finalTx.sourceOfFunds?.provided?.card?.number || "****";
-
-    // ✅ Decision matrix
-    const successCodes = ["APPROVED", "APPROVED_AUTO", "APPROVED_PENDING_SETTLEMENT"];
-    const failCodes = [
-      "DECLINED",
-      "DECLINED_AVS",
-      "DECLINED_CSC",
-      "DECLINED_AVS_CSC",
-      "EXPIRED_CARD",
-      "TIMED_OUT",
-      "UNSPECIFIED_FAILURE",
-      "ACQUIRER_SYSTEM_ERROR",
-      "AUTHENTICATION_FAILED",
-      "INSUFFICIENT_FUNDS",
-      "BLOCKED",
-      "CANCELLED",
-      "FAILED",
-      "ERROR",
-    ];
-
-    let finalStatus = "FAILED";
-    let finalResult = "FAILURE";
-
-    if (txResult === "SUCCESS" && successCodes.includes(gatewayCode)) {
-      finalStatus = "CAPTURED";
-      finalResult = "SUCCESS";
-    }
-
-    if (failCodes.includes(gatewayCode) || txResult === "FAILURE") {
-      finalStatus = "FAILED";
-      finalResult = "FAILURE";
-    }
+    const data = response.data;
+    const result = data.result?.toUpperCase() || "UNKNOWN";
+    const gatewayCode = data.response?.gatewayCode?.toUpperCase() || "UNKNOWN";
 
     res.json({
       orderId: data.id,
       amount: data.amount,
       currency: data.currency,
-      creationTime: data.creationTime,
-      result: finalResult,
-      status: finalStatus,
+      result,
       gatewayCode,
-      acquirerMessage,
-      cardBrand,
-      cardNumber,
+      status: data.status || "UNKNOWN",
     });
-  } catch (err) {
-    console.error("❌ Error retrieving order:", err);
-    res.status(500).json({ error: "Retrieve failed", details: err.message });
-  }
-});
-
-
-
-/* ==========================================================
-   ✅ PAYMENT SUCCESS
-   Called by Mastercard after successful payment
-   - Converts Daftra draft → final invoice
-   - Adds payment record automatically
-   - Redirects to thank-you page
-========================================================== */
-app.get("/payment-success", async (req, res) => {
-  const { draftId } = req.query;
-  console.log(`💳 Mastercard success callback for draft ${draftId}`);
-
-  try {
-    // 1️⃣ Convert draft → final invoice
-    await axios.put(
-      `https://www.mrphonelb.com/api2/invoices/${draftId}`,
-      { status: "final" },
-      {
-        headers: {
-          Authorization: `APIKEY ${process.env.DAFTRA_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    console.log(`✅ Invoice ${draftId} finalized.`);
-
-    // 2️⃣ Add payment record
-    await axios.post(
-      "https://www.mrphonelb.com/api2/invoice_payments",
-      {
-        invoice_id: draftId,
-        amount: "FULL",
-        payment_method: "Credit Card",
-        note: "Auto-confirmed via Mastercard .NetCommerce",
-      },
-      {
-        headers: {
-          Authorization: `APIKEY ${process.env.DAFTRA_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    console.log(`✅ Payment recorded for invoice ${draftId}`);
-
-    // 3️⃣ Redirect user to thank-you page
-    res.redirect(`https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${draftId}`);
   } catch (error) {
-    console.error("❌ Error updating Daftra:", error.response?.data || error.message);
-    res.redirect(`https://www.mrphonelb.com/client/contents/error?invoice_id=${draftId}`);
+    console.error("❌ Retrieve Order Error:", error.response?.data || error.message);
+    res.status(500).json({
+      error: "Failed to retrieve order",
+      details: error.response?.data || error.message,
+    });
   }
 });
 
-
-// ==============================================
-// ✅ START SERVER
-// ==============================================
+/* ====================================================
+   🚀 START SERVER
+   ==================================================== */
 app.listen(port, () => {
   console.log(`✅ Server running on http://localhost:${port}`);
 });
