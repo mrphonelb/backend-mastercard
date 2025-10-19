@@ -60,7 +60,6 @@ app.post("/initiate-checkout", async (req, res) => {
     },
     interaction: {
       operation: "PURCHASE",
-      operationMode: "HOSTED",
       returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
       merchant: {
         name: "Mr. Phone Lebanon",
