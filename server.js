@@ -46,7 +46,7 @@ app.get("/", (_, res) => {
    ==================================================== */ 
 app.post("/initiate-checkout", async (req, res) => { 
   const { amount, currency = "USD", draftId, description, customer } = req.body; 
-  const orderId = draftId || ORDER-${Date.now()}; 
+  const orderId = draftId || `ORDER-${Date.now()}`;
 
   try { 
     console.log(🧾 Creating Mastercard session for order ${orderId}...); 
