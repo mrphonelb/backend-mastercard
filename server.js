@@ -49,7 +49,7 @@ app.post("/initiate-checkout", async (req, res) => {
   const orderId = draftId || `ORDER-${Date.now()}`;
 
   try { 
-    console.log(🧾 Creating Mastercard session for order ${orderId}...); 
+    console.log(`🧾 Creating Mastercard session for order ${orderId}...`); 
 
     const response = await axios.post( 
       ${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session, 
