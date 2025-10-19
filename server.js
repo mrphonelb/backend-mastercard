@@ -4,102 +4,104 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-app.use(express.json());
 
-/* =======================================================
-   🌐 CORS
-   ======================================================= */
+/* ====================================================
+   🌐 CORS SETUP
+   ==================================================== */
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS.split(","),
+    origin: "*", // allow all origins during testing
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+app.options(/.*/, cors());
+app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-
-/* =======================================================
-   🩺 HEALTH CHECK
-   ======================================================= */
-app.get("/", (_, res) => {
-  res.send("✅ MrPhone Backend running — Mastercard + Daftra API integrated");
+app.use((req, res, next) => {
+  console.log(`➡️ ${req.method} ${req.url}`);
+  next();
 });
 
-/* =======================================================
-   🧾 Create Daftra Invoice (with API Key)
-   ======================================================= */
-async function createDaftraInvoice(invoiceData) {
-  const res = await axios.post(
-    `${process.env.DAFTRA_BASE_URL}/invoices`,
-    invoiceData,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `api_key ${process.env.DAFTRA_API_KEY}`,
-      },
-    }
-  );
-  return res.data;
-}
+const port = process.env.PORT || 3000;
 
-/* =======================================================
-   💳 INITIATE CHECKOUT
-   ======================================================= */
+/* ====================================================
+   🩺 HEALTH CHECK
+   ==================================================== */
+app.get("/", (_, res) => {
+  res.send("✅ MrPhone Backend is running for Mastercard Hosted Checkout!");
+});
+
+/* ====================================================
+   💳 INITIATE CHECKOUT — Create Mastercard Session
+   ==================================================== */
 app.post("/initiate-checkout", async (req, res) => {
+  const { amount, currency = "USD", draftId, description, customer } = req.body;
+  const orderId = draftId || `ORDER-${Date.now()}`;
+
   try {
-    const { invoiceData, totalAmount } = req.body;
-    const orderId = `ORDER-${Date.now()}`;
+    console.log(`🧾 Creating Mastercard session for order ${orderId}`);
 
-    console.log("🧾 Creating Daftra invoice...");
-    const invoice = await createDaftraInvoice(invoiceData);
-    console.log("✅ Daftra invoice created:", invoice.id);
-
-    const payload = {
-      apiOperation: "CREATE_CHECKOUT_SESSION",
-      interaction: {
-        operation: "PURCHASE",
-        merchant: { name: "Mr Phone Lebanon" },
+    const response = await axios.post(
+      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
+      {
+        apiOperation: "INITIATE_CHECKOUT",
+        interaction: {
+          operation: "PURCHASE",
+          merchant: {
+            name: "Mr. Phone Lebanon",
+            url: "https://www.mrphonelb.com",
+            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+          },
+          locale: "en_US",
+          returnUrl: `https://mrphone-backend.onrender.com/payment-result/${orderId}`,
+          displayControl: {
+            billingAddress: "HIDE",
+            shipping: "HIDE",
+            customerEmail: "HIDE",
+          },
+        },
+        order: {
+          id: orderId,
+          amount,
+          currency,
+          description: description || `Order #${orderId} - Mr. Phone Lebanon`,
+        },
+        customer: {
+          firstName: customer?.firstName || "Guest",
+          lastName: customer?.lastName || "Customer",
+          email: customer?.email || "guest@mrphonelb.com",
+          mobilePhone: customer?.phone || "00000000",
+        },
       },
-      order: {
-        id: orderId,
-        amount: parseFloat(totalAmount).toFixed(2),
-        currency: "USD",
-        description: `Invoice #${invoice.id}`,
-      },
-    };
-
-    console.log("💳 Creating Mastercard session...");
-    const { data } = await axios.post(
-      `${process.env.HOST}/api/rest/version/71/merchant/${process.env.MERCHANT_ID}/session`,
-      payload,
       {
         auth: {
-          username: process.env.MERCHANT_ID,
+          username: `merchant.${process.env.MERCHANT_ID}`,
           password: process.env.API_PASSWORD,
         },
+        headers: { "Content-Type": "application/json" },
       }
     );
 
-    console.log("✅ Mastercard session created:", data.session.id);
+    console.log("✅ Mastercard session created:", response.data.session.id);
+
     res.json({
-      result: "SUCCESS",
-      session: data.session,
+      sessionId: response.data.session.id,
+      successIndicator: response.data.successIndicator,
       orderId,
-      invoiceId: invoice.id,
     });
   } catch (error) {
-    console.error("❌ INITIATE CHECKOUT ERROR:", error.response?.data || error.message);
+    console.error("❌ INITIATE_CHECKOUT failed:", error.response?.data || error.message);
     res.status(500).json({
-      result: "ERROR",
-      message: error.response?.data || error.message,
+      error: "Failed to create Mastercard session",
+      details: error.response?.data || error.message,
     });
   }
 });
 
-/* =======================================================
-   🧾 PAYMENT RESULT (Verify + Update Invoice)
-   ======================================================= */
+/* ====================================================
+   💰 PAYMENT RESULT — Verify + Create Daftra Invoice (using API Key)
+   ==================================================== */
 app.get("/payment-result/:orderId", async (req, res) => {
   const { orderId } = req.params;
 
@@ -107,32 +109,68 @@ app.get("/payment-result/:orderId", async (req, res) => {
     console.log(`🔍 Verifying order ${orderId}...`);
 
     const verify = await axios.get(
-      `${process.env.HOST}/api/rest/version/71/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
+      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
       {
         auth: {
-          username: process.env.MERCHANT_ID,
+          username: `merchant.${process.env.MERCHANT_ID}`,
           password: process.env.API_PASSWORD,
         },
+        headers: { "Content-Type": "application/json" },
       }
     );
 
-    const result = verify.data.result?.toUpperCase() || "UNKNOWN";
-    console.log(`💬 MPGS result for ${orderId} → ${result}`);
+    const data = verify.data;
+    const result = data.result?.toUpperCase() || "UNKNOWN";
+    console.log(`💬 Payment result for ${orderId}: ${result}`);
 
-    if (result === "SUCCESS" || result === "CAPTURED") {
-      console.log("✅ Payment successful. Redirecting to Thank You...");
-      return res.redirect(process.env.THANKYOU_URL);
+    if (result === "SUCCESS") {
+      /* ✅ Create Daftra Invoice via API Key (NOT bearer) */
+      const daftra = await axios.post(
+        "https://www.mrphonelb.com/api2/invoices.json",
+        {
+          draft: false,
+          name: `Invoice for ${orderId}`,
+          currency: "USD",
+          status: "paid",
+          items: [
+            {
+              name: "Online Order",
+              price: data.amount,
+              qty: 1,
+            },
+          ],
+        },
+        {
+          headers: {
+            "APIKEY": process.env.DAFTRA_API_KEY, // ✅ Using Daftra API key header
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const invoiceId = daftra.data.id;
+      console.log("✅ Daftra invoice created:", invoiceId);
+
+      return res.redirect(
+        `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
+      );
     } else {
-      console.warn("❌ Payment failed. Redirecting to Error page...");
-      return res.redirect(process.env.ERROR_URL);
+      console.warn("❌ Payment failed or not completed");
+      return res.redirect(
+        `https://www.mrphonelb.com/client/contents/error?invoice_id=${orderId}`
+      );
     }
   } catch (err) {
-    console.error("💥 Verification failed:", err.message);
-    return res.redirect(process.env.ERROR_URL);
+    console.error("❌ Verification or Daftra creation failed:", err.message);
+    return res.redirect(
+      `https://www.mrphonelb.com/client/contents/error?invoice_id=${orderId}`
+    );
   }
 });
 
-/* =======================================================
+/* ====================================================
    🚀 START SERVER
-   ======================================================= */
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+   ==================================================== */
+app.listen(port, () => {
+  console.log(`✅ Server running on http://localhost:${port}`);
+});
