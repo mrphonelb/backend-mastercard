@@ -10,7 +10,7 @@ const app = express();
    ==================================================== */
 app.use(
   cors({
-    origin: ["https://www.mrphonelb.com"], // allow only your domain
+    origin: "*", // temporarily allow all origins for testing
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
