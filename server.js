@@ -24,13 +24,13 @@ app.use(
 app.options("*", cors()); 
 app.use(express.json()); 
 
-/* ==================================================== 
-   🛰️ LOG REQUESTS 
-   ==================================================== */ 
-app.use((req, res, next) => { 
-  console.log(➡️ ${req.method} ${req.url} | From Origin: ${req.headers.origin}); 
-  next(); 
-}); 
+/* ====================================================
+   🛰️ LOG REQUESTS
+   ==================================================== */
+app.use((req, res, next) => {
+  console.log(`➡️  ${req.method} ${req.url} | From Origin: ${req.headers.origin}`);
+  next();
+});
 
 const port = process.env.PORT || 3000; 
 
