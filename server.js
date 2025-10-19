@@ -68,12 +68,6 @@ app.post("/initiate-checkout", async (req, res) => {
             logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
         },
-        customer: {
-          firstName: customer?.firstName || "Guest",
-          lastName: customer?.lastName || "Customer",
-          email: customer?.email || "guest@mrphonelb.com",
-          mobilePhone: customer?.phone || "00000000",
-        },
       },
       {
         auth: {
