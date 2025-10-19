@@ -157,49 +157,49 @@ app.get("/payment-result/:orderId", async (req, res) => {
 });
 
 
-const daftra = await axios.post(
-  "https://www.mrphonelb.com/api2/invoices.json",
-  {
+// ✅ Create new Daftra invoice
+try {
+  const payload = {
     name: `Online Order ${orderId}`,
     currency: "USD",
-    draft: false,          // ✅ Create a real invoice (not draft)
-    status: "paid",        // ✅ Match successful Mastercard payment
+    draft: false,
+    status: "paid",
     items: [
       {
-        name: "Online Order Payment",
+        name: "Online Payment",
         qty: 1,
-        price: parseFloat(data.amount?.amount || data.amount || 0), // ✅ Numeric
+        price: parseFloat(data.amount?.amount || data.amount || 0),
       },
     ],
-  },
-  {
-    headers: {
-      APIKEY: process.env.DAFTRA_API_KEY,
-      "Content-Type": "application/json",
-    },
-  }
-);
+    notes: `Paid via Mastercard Hosted Checkout | Order ID: ${orderId}`,
+  };
 
-      const invoiceId = daftra.data.id;
-      console.log("✅ Daftra invoice created:", invoiceId);
+  console.log("🧠 Daftra payload:", payload);
 
-      return res.redirect(
-        `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
-      );
+  const daftra = await axios.post(
+    "https://www.mrphonelb.com/api2/invoices.json",
+    payload,
+    {
+      headers: {
+        APIKEY: process.env.DAFTRA_API_KEY,
+        "Content-Type": "application/json",
+      },
     }
+  );
 
-    // ❌ Payment failed or already paid
-    console.warn("❌ Payment failed or already processed.");
-    return res.redirect(
-      "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
-    );
-  } catch (err) {
-    console.error("❌ Verification or Daftra creation failed:", err.message);
-    return res.redirect(
-      "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
-    );
-  }
-});
+  const invoiceId = daftra.data.id;
+  console.log("✅ Daftra invoice created:", invoiceId);
+
+  return res.redirect(
+    `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
+  );
+} catch (err) {
+  console.error("❌ Daftra invoice creation failed:", err.response?.data || err.message);
+  return res.redirect(
+    "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
+  );
+}
+
 
 /* ====================================================
    🚀 START SERVER
