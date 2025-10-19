@@ -149,28 +149,30 @@ app.get("/payment-result/:orderId", async (req, res) => {
       }
 
       // ✅ Create new Daftra invoice
-      const daftra = await axios.post(
-        "https://www.mrphonelb.com/api2/invoices.json",
-        {
-          draft: true,
-          name: `Invoice for ${orderId}`,
-          currency: "USD",
-          status: "unpaid",
-          items: [
-            {
-              name: "Online Order",
-              price: data.amount,
-              qty: 1,
-            },
-          ],
-        },
-        {
-          headers: {
-            APIKEY: process.env.DAFTRA_API_KEY,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      // ✅ Create final paid Daftra invoice
+const daftra = await axios.post(
+  "https://www.mrphonelb.com/api2/invoices.json",
+  {
+    draft: false,               // ✅ create actual invoice
+    name: `Online Order #${orderId}`,
+    currency: "USD",
+    status: "paid",             // ✅ mark as paid
+    items: [
+      {
+        name: "Online Payment",
+        price: data.amount || amount,
+        qty: 1,
+      },
+    ],
+    notes: `Payment confirmed via Mastercard. Order ID: ${orderId}`,
+  },
+  {
+    headers: {
+      APIKEY: process.env.DAFTRA_API_KEY,
+      "Content-Type": "application/json",
+    },
+  }
+);
 
       const invoiceId = daftra.data.id;
       console.log("✅ Daftra invoice created:", invoiceId);
