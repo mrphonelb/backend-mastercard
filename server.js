@@ -49,34 +49,33 @@ app.post("/initiate-checkout", async (req, res) => {
   try {
     console.log(`🧾 Creating Hosted Checkout session for order ${orderId}...`);
 
-    const response = await axios.post(
-      `${process.env.HOST}/api/rest/version/71/merchant/${process.env.MERCHANT_ID}/session`,
-      {
-        apiOperation: "CREATE_SESSION",
-        order: {
-          id: orderId,
-          amount,
-          currency,
-          description: description || `Order #${orderId}`,
-        },
-        interaction: {
-          operation: "PURCHASE",
-          operationMode: "HOSTED",
-          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
-          merchant: {
-            name: "Mr. Phone Lebanon",
-            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
-          },
-        },
+   const response = await axios.post(
+  `${process.env.HOST}/api/rest/version/71/merchant/${process.env.MERCHANT_ID}/session`,
+  {
+    apiOperation: "CREATE_SESSION",
+    order: {
+      id: orderId,
+      amount,
+      currency,
+    },
+    interaction: {
+      operation: "PURCHASE",
+      operationMode: "HOSTED",
+      returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
+      merchant: {
+        name: "Mr. Phone Lebanon",
+        logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
       },
-      {
-        auth: {
-          username: `merchant.${process.env.MERCHANT_ID}`,
-          password: process.env.API_PASSWORD,
-        },
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    },
+  },
+  {
+    auth: {
+      username: `merchant.${process.env.MERCHANT_ID}`,
+      password: process.env.API_PASSWORD,
+    },
+    headers: { "Content-Type": "application/json" },
+  }
+);
 
     const { session } = response.data;
     console.log("✅ Session created:", session.id);
