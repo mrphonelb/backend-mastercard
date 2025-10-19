@@ -133,73 +133,64 @@ app.get("/payment-result/:orderId", async (req, res) => {
     console.log(`💬 Payment result for ${orderId}: ${result}`);
 
     if (result === "SUCCESS") {
-      // ✅ Before creating new Daftra invoice, check if it already exists
+      // ✅ Always create new Daftra invoice
+      console.log("🧾 Skipping duplicate check — always creating new Daftra invoice.");
+
       try {
-        const existing = await axios.get(
-          `https://www.mrphonelb.com/api2/invoices.json?search=${orderId}`,
-          { headers: { APIKEY: process.env.DAFTRA_API_KEY } }
+        const payload = {
+          name: `Online Order ${orderId}`,
+          currency: "USD",
+          draft: false,
+          status: "paid",
+          items: [
+            {
+              name: "Online Payment",
+              qty: 1,
+              price: parseFloat(data.amount?.amount || data.amount || 0),
+            },
+          ],
+          notes: `Paid via Mastercard Hosted Checkout | Order ID: ${orderId}`,
+        };
+
+        console.log("🧠 Daftra payload:", payload);
+
+        const daftra = await axios.post(
+          "https://www.mrphonelb.com/api2/invoices.json",
+          payload,
+          {
+            headers: {
+              APIKEY: process.env.DAFTRA_API_KEY,
+              "Content-Type": "application/json",
+            },
+          }
         );
 
-       console.log("🧾 Skipping duplicate check — always creating new Daftra invoice.");
+        const invoiceId = daftra.data.id;
+        console.log("✅ Daftra invoice created:", invoiceId);
 
+        return res.redirect(
+          `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
+        );
       } catch (err) {
-        console.warn("ℹ️ Could not verify existing invoices:", err.message);
+        console.error("❌ Daftra invoice creation failed:", err.response?.data || err.message);
+        return res.redirect(
+          "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
+        );
       }
-
-      // ✅ Create new Daftra invoice
-      // ✅ Create final paid Daftra invoice
-      console.log("🧠 Daftra payload:", {
-  name: `Online Order ${orderId}`,
-  currency: "USD",
-  draft: false,
-  status: "paid",
-  amount: data.amount,
-});
-
-
-// ✅ Create new Daftra invoice
-try {
-  const payload = {
-    name: `Online Order ${orderId}`,
-    currency: "USD",
-    draft: false,
-    status: "paid",
-    items: [
-      {
-        name: "Online Payment",
-        qty: 1,
-        price: parseFloat(data.amount?.amount || data.amount || 0),
-      },
-    ],
-    notes: `Paid via Mastercard Hosted Checkout | Order ID: ${orderId}`,
-  };
-
-  console.log("🧠 Daftra payload:", payload);
-
-  const daftra = await axios.post(
-    "https://www.mrphonelb.com/api2/invoices.json",
-    payload,
-    {
-      headers: {
-        APIKEY: process.env.DAFTRA_API_KEY,
-        "Content-Type": "application/json",
-      },
     }
-  );
 
-  const invoiceId = daftra.data.id;
-  console.log("✅ Daftra invoice created:", invoiceId);
-
-  return res.redirect(
-    `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
-  );
-} catch (err) {
-  console.error("❌ Daftra invoice creation failed:", err.response?.data || err.message);
-  return res.redirect(
-    "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
-  );
-}
-
+    // ❌ Payment failed or already processed
+    console.warn("❌ Payment failed or already processed.");
+    return res.redirect(
+      "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
+    );
+  } catch (err) {
+    console.error("❌ Verification or Daftra creation failed:", err.message);
+    return res.redirect(
+      "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
+    );
+  }
+});
 
 /* ====================================================
    🚀 START SERVER
