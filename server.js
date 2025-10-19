@@ -65,7 +65,6 @@ app.post("/initiate-checkout", async (req, res) => {
           returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
           merchant: {
             name: "Mr. Phone Lebanon",
-            url: "https://www.mrphonelb.com",
             logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
         },
