@@ -140,10 +140,8 @@ app.get("/payment-result/:orderId", async (req, res) => {
           { headers: { APIKEY: process.env.DAFTRA_API_KEY } }
         );
 
-        if (existing.data?.data?.length > 0) {
-          console.log("⚠️ Invoice already exists for this order, skipping creation.");
-          return res.redirect("https://www.mrphonelb.com/client/contents/thankyou");
-        }
+       console.log("🧾 Skipping duplicate check — always creating new Daftra invoice.");
+
       } catch (err) {
         console.warn("ℹ️ Could not verify existing invoices:", err.message);
       }
