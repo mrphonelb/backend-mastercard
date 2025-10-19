@@ -109,7 +109,7 @@ app.post("/initiate-checkout", async (req, res) => {
 });
 
 /* ====================================================
-   💰 PAYMENT RESULT — Verify + Create Daftra Invoice (using API Key)
+   💰 PAYMENT RESULT — Verify + Create Daftra Invoice (linked to same draft)
    ==================================================== */
 app.get("/payment-result/:orderId", async (req, res) => {
   const { orderId } = req.params;
@@ -133,64 +133,89 @@ app.get("/payment-result/:orderId", async (req, res) => {
     console.log(`💬 Payment result for ${orderId}: ${result}`);
 
     if (result === "SUCCESS") {
-      // ✅ Always create new Daftra invoice
-      console.log("🧾 Skipping duplicate check — always creating new Daftra invoice.");
+      console.log("🧾 Payment approved, creating Daftra invoice...");
 
-      try {
-        const payload = {
-          name: `Online Order ${orderId}`,
-          currency: "USD",
-          draft: false,
-          status: "paid",
-          items: [
-            {
-              name: "Online Payment",
-              qty: 1,
-              price: parseFloat(data.amount?.amount || data.amount || 0),
-            },
-          ],
-          notes: `Paid via Mastercard Hosted Checkout | Order ID: ${orderId}`,
-        };
+      // ✅ Extract draft ID from orderId (e.g. D46957-1760911585809 → 46957)
+      const draftId = orderId.match(/^D(\d+)-/)?.[1];
+      console.log("📎 Extracted draft ID:", draftId);
 
-        console.log("🧠 Daftra payload:", payload);
-
-        const daftra = await axios.post(
-          "https://www.mrphonelb.com/api2/invoices.json",
-          payload,
-          {
-            headers: {
-              APIKEY: process.env.DAFTRA_API_KEY,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        const invoiceId = daftra.data.id;
-        console.log("✅ Daftra invoice created:", invoiceId);
-
-        return res.redirect(
-          `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
-        );
-      } catch (err) {
-        console.error("❌ Daftra invoice creation failed:", err.response?.data || err.message);
-        return res.redirect(
-          "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
-        );
+      if (!draftId) {
+        console.error("❌ No draft ID found in orderId!");
+        return res.redirect("https://www.mrphonelb.com/client/invoices/pay?source=website_front");
       }
+
+      // ✅ Get the draft invoice details (to retrieve client_id and items)
+      const draftResponse = await axios.get(
+        `https://www.mrphonelb.com/api2/invoices/${draftId}.json`,
+        { headers: { APIKEY: process.env.DAFTRA_API_KEY } }
+      );
+
+      const draft = draftResponse.data;
+      console.log("🧾 Original draft invoice loaded:", draft.id);
+
+      // ✅ Calculate total and add 3.5% fee
+      const baseAmount = parseFloat(draft.total || 0);
+      const fee = baseAmount * 0.035;
+      const finalAmount = (baseAmount + fee).toFixed(2);
+
+      // ✅ Prepare payload for paid invoice
+      const payload = {
+        name: `Online Payment for Draft #${draft.id}`,
+        client_id: draft.client_id,
+        currency: "USD",
+        draft: false,
+        status: "paid",
+        items: [
+          ...draft.items.map(item => ({
+            name: item.name,
+            qty: item.qty,
+            price: item.price,
+          })),
+          {
+            name: "Credit/Debit Card Fee (3.5%)",
+            qty: 1,
+            price: parseFloat(fee.toFixed(2)),
+          },
+        ],
+        notes: `✅ Paid via Mastercard Hosted Checkout | Order ID: ${orderId}`,
+      };
+
+      console.log("🧠 Daftra payload:", payload);
+
+      // ✅ Create final paid invoice
+      const daftra = await axios.post(
+        "https://www.mrphonelb.com/api2/invoices.json",
+        payload,
+        {
+          headers: {
+            APIKEY: process.env.DAFTRA_API_KEY,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const invoiceId = daftra.data.id;
+      console.log("✅ Daftra invoice created:", invoiceId);
+
+      // ✅ Redirect client to thank you page
+      return res.redirect(
+        `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
+      );
     }
 
-    // ❌ Payment failed or already processed
-    console.warn("❌ Payment failed or already processed.");
+    // ❌ Payment failed or canceled
+    console.warn("❌ Payment failed or canceled.");
     return res.redirect(
       "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
     );
   } catch (err) {
-    console.error("❌ Verification or Daftra creation failed:", err.message);
+    console.error("❌ Verification or Daftra creation failed:", err.response?.data || err.message);
     return res.redirect(
       "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
     );
   }
 });
+
 
 /* ====================================================
    🚀 START SERVER
