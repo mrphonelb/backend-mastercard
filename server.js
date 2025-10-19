@@ -11,9 +11,9 @@ const app = express();
 app.use(
   cors({
     origin: [
-      "https://www.mrphonelb.com", // ✅ Your live website
-      "https://mrphone-backend.onrender.com", // ✅ Your backend host (Render)
-      "http://localhost:3000" // optional for local testing
+      "https://www.mrphonelb.com",
+      "https://mrphone-backend.onrender.com",
+      "http://localhost:3000"
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "APIKEY"],
@@ -45,55 +45,39 @@ app.get("/", (_, res) => {
    💳 INITIATE CHECKOUT — Create Mastercard Session
    ==================================================== */
 app.post("/initiate-checkout", async (req, res) => {
+  const { amount, currency = "USD", draftId, description, customer } = req.body;
+  const orderId = draftId ? draftId.toString() : `ORDER-${Date.now()}`;
+
   try {
-    const { amount, currency = "USD", draftId, description, customer } = req.body;
-
-    // 🔒 Coerce to a clean number (2 decimals). Reject if invalid/zero.
-    const amountNum = Number(
-      (Math.round(Number(String(amount).replace(/[^\d.]/g, "")) * 100) / 100).toFixed(2)
-    );
-
-    if (!Number.isFinite(amountNum) || amountNum <= 0) {
-      console.error("❌ INITIATE_CHECKOUT: invalid amount:", amount);
-      return res.status(400).json({ error: "Invalid amount", sent: amount, parsed: amountNum });
-    }
-
-    // Use the Daftra draft ID as the Mastercard order id (string)
-    const orderId = draftId ? String(draftId) : `ORDER-${Date.now()}`;
-
-    console.log(`🧾 Creating Mastercard session for Daftra draft ${orderId}... amount=${amountNum}`);
-
-    const payload = {
-      apiOperation: "INITIATE_CHECKOUT",
-      interaction: {
-        operation: "PURCHASE",
-        // IMPORTANT: send the user back to YOUR result handler
-        returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
-        locale: "en_US",
-        merchant: {
-          name: "Mr. Phone Lebanon",
-          url: "https://www.mrphonelb.com",
-          logo:
-            "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
-        },
-      },
-      order: {
-        id: orderId,
-        amount: amountNum,
-        currency,
-        description: description || `Order #${orderId} - Mr. Phone Lebanon`,
-      },
-      customer: {
-        firstName: customer?.firstName || "Guest",
-        lastName: customer?.lastName || "Customer",
-        email: customer?.email || "guest@mrphonelb.com",
-        mobilePhone: customer?.phone || "00000000",
-      },
-    };
+    console.log(`🧾 Creating Mastercard session for Daftra draft ${orderId}...`);
 
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
-      payload,
+      {
+        apiOperation: "INITIATE_CHECKOUT",
+        interaction: {
+          operation: "PURCHASE",
+          merchant: {
+            name: "Mr. Phone Lebanon",
+            url: "https://www.mrphonelb.com",
+            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+          },
+          locale: "en_US",
+          returnUrl: "https://www.mrphonelb.com/client/invoices/pay?source=website_front",
+        },
+        order: {
+          id: orderId,
+          amount, // ✅ use the amount as-is (no 3.5% added)
+          currency,
+          description: description || `Order #${orderId} - Mr. Phone Lebanon`,
+        },
+        customer: {
+          firstName: customer?.firstName || "Guest",
+          lastName: customer?.lastName || "Customer",
+          email: customer?.email || "guest@mrphonelb.com",
+          mobilePhone: customer?.phone || "00000000",
+        },
+      },
       {
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
@@ -119,7 +103,7 @@ app.post("/initiate-checkout", async (req, res) => {
 });
 
 /* ====================================================
-   💰 PAYMENT RESULT — Verify + Create Daftra Invoice (linked to same draft)
+   💰 PAYMENT RESULT — Verify + Create Daftra Invoice
    ==================================================== */
 app.get("/payment-result/:orderId", async (req, res) => {
   const { orderId } = req.params;
@@ -139,85 +123,74 @@ app.get("/payment-result/:orderId", async (req, res) => {
     );
 
     const data = verify.data;
-    const result = (data.result || "").toUpperCase();
+    const result = data.result?.toUpperCase() || "UNKNOWN";
     console.log(`💬 Payment result for ${orderId}: ${result}`);
 
-    if (result !== "SUCCESS") {
-      console.warn("❌ Payment failed or canceled.");
-      return res.redirect("https://www.mrphonelb.com/client/invoices/pay?source=website_front");
+    if (result === "SUCCESS") {
+      console.log("🧾 Payment approved, creating Daftra invoice...");
+
+      const draftId = orderId.match(/^D?(\d+)/)?.[1];
+      console.log("📎 Extracted draft ID:", draftId);
+
+      if (!draftId) {
+        console.error("❌ No draft ID found in orderId!");
+        return res.redirect("https://www.mrphonelb.com/client/invoices/pay?source=website_front");
+      }
+
+      // ✅ Get the draft invoice details
+      const draftResponse = await axios.get(
+        `https://www.mrphonelb.com/api2/invoices/${draftId}.json`,
+        { headers: { APIKEY: process.env.DAFTRA_API_KEY } }
+      );
+
+      const draft = draftResponse.data;
+      console.log("🧾 Original draft invoice loaded:", draft.id);
+
+      // ✅ Create paid invoice (no 3.5% fee)
+      const payload = {
+        name: `Online Payment for Draft #${draft.id}`,
+        client_id: draft.client_id,
+        currency: "USD",
+        draft: false,
+        status: "paid",
+        items: draft.items.map(item => ({
+          name: item.name,
+          qty: item.qty,
+          price: item.price,
+        })),
+        notes: `✅ Paid via Mastercard Hosted Checkout | Order ID: ${orderId}`,
+      };
+
+      const daftra = await axios.post(
+        "https://www.mrphonelb.com/api2/invoices.json",
+        payload,
+        {
+          headers: {
+            APIKEY: process.env.DAFTRA_API_KEY,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const invoiceId = daftra.data.id;
+      console.log("✅ Daftra invoice created:", invoiceId);
+
+      return res.redirect(
+        `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`
+      );
     }
 
-    console.log("🧾 Payment approved, creating Daftra invoice...");
-
-    // The orderId IS the Daftra draft id (we used it above)
-    const draftId = orderId;
-
-    // Load draft to get client_id and items
-    const draftResponse = await axios.get(
-      `https://www.mrphonelb.com/api2/invoices/${draftId}.json`,
-      { headers: { APIKEY: process.env.DAFTRA_API_KEY } }
+    console.warn("❌ Payment failed or canceled.");
+    return res.redirect(
+      "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
     );
-
-    const draft = draftResponse.data;
-    if (!draft?.id || !draft?.client_id) {
-      console.error("❌ Draft load error: missing id or client_id", draft);
-      return res.redirect("https://www.mrphonelb.com/client/invoices/pay?source=website_front");
-    }
-
-    // Compute fee (3.5%) on the draft total
-    const baseAmount = Number(draft.total || 0);
-    const fee = Math.round(baseAmount * 0.035 * 100) / 100;
-
-    const items =
-      Array.isArray(draft.items) && draft.items.length
-        ? draft.items.map((it) => ({
-            name: it.name,
-            qty: it.qty,
-            price: it.price,
-          }))
-        : [
-            {
-              name: `Draft #${draft.id} items`,
-              qty: 1,
-              price: baseAmount,
-            },
-          ];
-
-    items.push({
-      name: "Credit/Debit Card Fee (3.5%)",
-      qty: 1,
-      price: fee,
-    });
-
-    const payload = {
-      name: `Online Payment for Draft #${draft.id}`,
-      client_id: draft.client_id, // REQUIRED
-      currency: "USD",
-      draft: false,
-      status: "paid",
-      items,
-      notes: `✅ Paid via Mastercard Hosted Checkout | Order ID (MC): ${orderId}`,
-    };
-
-    console.log("🧠 Daftra payload:", payload);
-
-    const daftra = await axios.post("https://www.mrphonelb.com/api2/invoices.json", payload, {
-      headers: {
-        APIKEY: process.env.DAFTRA_API_KEY,
-        "Content-Type": "application/json",
-      },
-    });
-
-    const invoiceId = daftra.data.id;
-    console.log("✅ Daftra invoice created:", invoiceId);
-
-    return res.redirect(`https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}`);
   } catch (err) {
     console.error("❌ Verification or Daftra creation failed:", err.response?.data || err.message);
-    return res.redirect("https://www.mrphonelb.com/client/invoices/pay?source=website_front");
+    return res.redirect(
+      "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
+    );
   }
 });
-
 
 /* ====================================================
    🚀 START SERVER
