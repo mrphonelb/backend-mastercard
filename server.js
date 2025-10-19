@@ -46,10 +46,10 @@ app.get("/", (_, res) => {
    ==================================================== */
 app.post("/initiate-checkout", async (req, res) => {
   const { amount, currency = "USD", draftId, description, customer } = req.body;
-  const orderId = draftId ? `D${draftId}-${Date.now()}` : `ORDER-${Date.now()}`;
+  const orderId = draftId ? draftId.toString() : `ORDER-${Date.now()}`;
 
   try {
-    console.log(`🧾 Creating Mastercard session for order ${orderId}...`);
+    console.log(`🧾 Creating Mastercard session for Daftra draft ${orderId}...`);
 
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
@@ -63,15 +63,10 @@ app.post("/initiate-checkout", async (req, res) => {
             logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
           locale: "en_US",
-          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
-          displayControl: {
-            billingAddress: "HIDE",
-            shipping: "HIDE",
-            customerEmail: "HIDE",
-          },
+          returnUrl: "https://www.mrphonelb.com/client/invoices/pay?source=website_front",
         },
         order: {
-          id: orderId,
+          id: orderId, // ✅ same as Daftra draft ID
           amount,
           currency,
           description: description || `Order #${orderId} - Mr. Phone Lebanon`,
@@ -96,7 +91,6 @@ app.post("/initiate-checkout", async (req, res) => {
 
     res.json({
       sessionId: response.data.session.id,
-      successIndicator: response.data.successIndicator,
       orderId,
     });
   } catch (error) {
