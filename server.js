@@ -152,10 +152,10 @@ app.get("/payment-result/:orderId", async (req, res) => {
       const daftra = await axios.post(
         "https://www.mrphonelb.com/api2/invoices.json",
         {
-          draft: false,
+          draft: true,
           name: `Invoice for ${orderId}`,
           currency: "USD",
-          status: "paid",
+          status: "unpaid",
           items: [
             {
               name: "Online Order",
