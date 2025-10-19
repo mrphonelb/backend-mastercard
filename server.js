@@ -148,21 +148,29 @@ app.get("/payment-result/:orderId", async (req, res) => {
 
       // ✅ Create new Daftra invoice
       // ✅ Create final paid Daftra invoice
+      console.log("🧠 Daftra payload:", {
+  name: `Online Order ${orderId}`,
+  currency: "USD",
+  draft: false,
+  status: "paid",
+  amount: data.amount,
+});
+
+
 const daftra = await axios.post(
   "https://www.mrphonelb.com/api2/invoices.json",
   {
-    draft: false,               // ✅ create actual invoice
-    name: `Online Order #${orderId}`,
+    name: `Online Order ${orderId}`,
     currency: "USD",
-    status: "paid",             // ✅ mark as paid
+    draft: false,          // ✅ Create a real invoice (not draft)
+    status: "paid",        // ✅ Match successful Mastercard payment
     items: [
       {
-        name: "Online Payment",
-        price: data.amount || amount,
+        name: "Online Order Payment",
         qty: 1,
+        price: parseFloat(data.amount?.amount || data.amount || 0), // ✅ Numeric
       },
     ],
-    notes: `Payment confirmed via Mastercard. Order ID: ${orderId}`,
   },
   {
     headers: {
