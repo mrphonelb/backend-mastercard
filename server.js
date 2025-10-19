@@ -63,7 +63,7 @@ app.post("/initiate-checkout", async (req, res) => {
             logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
           locale: "en_US",
-          returnUrl: `https://mrphone-backend.onrender.com/payment-result/${orderId}`,
+          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
           displayControl: {
             billingAddress: "HIDE",
             shipping: "HIDE",
