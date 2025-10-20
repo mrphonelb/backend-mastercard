@@ -22,7 +22,6 @@ app.post("/initiate-checkout", async (req, res) => {
     const payload = {
   apiOperation: "CREATE_CHECKOUT_SESSION",
   interaction: {
-    operation: "PURCHASE",
     returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
     merchant: {
       name: "Mr. Phone LB",
@@ -34,6 +33,7 @@ app.post("/initiate-checkout", async (req, res) => {
     currency: "USD"
   }
 };
+
 
 
 
