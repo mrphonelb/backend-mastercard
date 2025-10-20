@@ -55,7 +55,7 @@ app.post("/initiate-checkout", async (req, res) => {
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
         apiOperation: "INITIATE_CHECKOUT",
-        interaction: {
+       interaction: {
   operation: "PURCHASE",
   merchant: { ... },
   locale: "en_US",
