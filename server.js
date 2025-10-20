@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 10000;
 /* =========================================================
    ✅ STEP 1 — INITIATE CHECKOUT SESSION
    ========================================================= */
-app.post("/create-mastercard-session", async (req, res) => {
+app.post("/initiate-checkout", async (req, res) => {
   try {
     const { orderId, amount, currency = "USD", description = "Mr Phone LB Order" } = req.body;
 
