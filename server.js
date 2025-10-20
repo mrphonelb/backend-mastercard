@@ -56,15 +56,16 @@ app.post("/initiate-checkout", async (req, res) => {
       {
         apiOperation: "INITIATE_CHECKOUT",
         interaction: {
-          operation: "PURCHASE",
-          merchant: {
-            name: "Mr. Phone Lebanon",
-            url: "https://www.mrphonelb.com",
-            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
-          },
-          locale: "en_US",
-          returnUrl: "https://www.mrphonelb.com/client/invoices/pay?source=website_front",
-        },
+  operation: "PURCHASE",
+  merchant: { ... },
+  locale: "en_US",
+  returnUrl: "https://www.mrphonelb.com/contents/process_content/payment_return",
+  displayControl: {
+    billingAddress: "HIDE",
+    shipping: "HIDE",
+    customerEmail: "HIDE"
+  }
+},
         order: {
           id: orderId,
           amount, // ✅ use the amount as-is (no 3.5% added)
