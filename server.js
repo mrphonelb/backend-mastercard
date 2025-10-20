@@ -72,9 +72,10 @@ app.post("/initiate-checkout", async (req, res) => {
     );
 
     const sessionId = response.data.session.id;
-    console.log("✅ Session created:", sessionId);
+const redirectUrl = `https://creditlibanais-netcommerce.gateway.mastercard.com/checkout/pay/${sessionId}`;
+console.log("✅ Session created:", sessionId);
+res.json({ sessionId, redirectUrl });
 
-    res.json({ sessionId });
   } catch (err) {
     console.error(
       "❌ INITIATE_CHECKOUT failed:",
