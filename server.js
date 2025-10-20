@@ -4,74 +4,74 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
-// ✅ Allow all origins for Daftra iframe / frontend
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
-
-const port = process.env.PORT || 10000;
-const HOST = process.env.HOST;
-const MERCHANT_ID = process.env.MERCHANT_ID;
-const API_PASSWORD = process.env.API_PASSWORD;
-
 /* ====================================================
-   ✅ Health Check
+   ✅ ENV Variables
    ==================================================== */
-app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend running for Mastercard Hosted Checkout.");
-});
+const HOST = process.env.HOST; // https://creditlibanais-netcommerce.gateway.mastercard.com
+const MERCHANT_ID = process.env.MERCHANT_ID; // TEST06263500
+const API_PASSWORD = process.env.API_PASSWORD; // your API password
+const PORT = process.env.PORT || 10000;
 
 /* ====================================================
    💳 Create Mastercard Checkout Session
    ==================================================== */
 app.post("/create-mastercard-session", async (req, res) => {
-  const { orderId, amount, currency } = req.body;
-
-  if (!orderId || !amount) {
-    return res.status(400).json({ error: "Missing orderId or amount" });
-  }
-
-  console.log(`💰 Creating Mastercard session for ${amount} ${currency || "USD"} | Order: ${orderId}`);
-
   try {
-    const url = `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`;
-    const authHeader =
-      "Basic " + Buffer.from(`merchant.${MERCHANT_ID}:${API_PASSWORD}`).toString("base64");
+    const { orderId, amount, currency } = req.body;
 
-    const payload = {
-      apiOperation: "INITIATE_CHECKOUT",
-      interaction: {
-        operation: "PURCHASE",
-        merchant: {
-          name: "Mr Phone LB"
+    if (!orderId || !amount || !currency) {
+      return res.status(400).json({ error: "Missing orderId, amount, or currency." });
+    }
+
+    console.log(`💰 Creating Mastercard session for ${amount} ${currency} | Order: ${orderId}`);
+
+    const response = await axios.post(
+      `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
+      {
+        apiOperation: "INITIATE_CHECKOUT",
+        interaction: {
+          operation: "PURCHASE",
+          merchant: {
+            name: "MrPhone Lebanon",
+            address: { line1: "Lebanon" }
+          },
+          displayControl: {
+            billingAddress: "HIDE", // ✅ hides billing section
+            customerEmail: "MANDATORY"
+          },
+          style: {
+            logo: "https://www.mrphonelb.com/frontend/images/logo.webp", // ✅ your logo
+            accentColor: "#d9498e", // ✅ brand color
+            buttonBackground: "#d9498e",
+            buttonText: "#ffffff"
+          }
         },
-        // ✅ Return back to same origin (so /card_payment can close itself)
-        returnUrl: "https://www.mrphonelb.com/contents/process_content/card_payment"
+        order: {
+          id: orderId,
+          amount: amount,
+          currency: currency,
+          description: "MrPhoneLB Online Purchase"
+        }
       },
-      order: {
-        id: orderId,
-        amount: parseFloat(amount),
-        currency: currency || "USD"
+      {
+        auth: {
+          username: `merchant.${MERCHANT_ID}`,
+          password: API_PASSWORD
+        },
+        headers: {
+          "Content-Type": "application/json"
+        }
       }
-    };
+    );
 
-    const response = await axios.post(url, payload, {
-      headers: {
-        Authorization: authHeader,
-        "Content-Type": "application/json"
-      }
-    });
-
-    console.log("✅ Session Created Successfully:", response.data);
+    console.log("✅ Mastercard Session Created:", response.data);
     res.json(response.data);
-
   } catch (err) {
-    console.error("❌ MPGS error:", err.response?.data || err.message);
-    res.status(400).json({
+    console.error("❌ Mastercard Session Error:", err.response?.data || err.message);
+    res.status(500).json({
       error: "Failed to create session",
       debug: err.response?.data || err.message
     });
@@ -79,8 +79,15 @@ app.post("/create-mastercard-session", async (req, res) => {
 });
 
 /* ====================================================
-   🧠 Start server
+   🧠 Health Check
    ==================================================== */
-app.listen(port, () =>
-  console.log(`🚀 MrPhone Backend running on port ${port}`)
-);
+app.get("/", (req, res) => {
+  res.send("✅ MrPhone Backend running for Mastercard Hosted Checkout.");
+});
+
+/* ====================================================
+   🚀 Start Server
+   ==================================================== */
+app.listen(PORT, () => {
+  console.log(`✅ MrPhone backend running on port ${PORT}`);
+});
