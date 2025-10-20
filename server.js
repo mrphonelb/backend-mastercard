@@ -22,27 +22,30 @@ app.post("/create-mastercard-session", async (req, res) => {
 
     console.log(`💰 Creating Mastercard session for ${amount} ${currency} | Order: ${orderId}`);
 
-    const payload = {
-      apiOperation: "INITIATE_CHECKOUT",
-      interaction: {
-        operation: "PURCHASE",
-        merchant: {
-          name: "Mr Phone Lebanon",
-          url: "https://www.mrphonelb.com"
-        },
-        displayControl: {
-          billingAddress: "HIDE",
-          customerEmail: "HIDE",
-          shipping: "HIDE"
-        }
-      },
-      order: {
-        id: orderId,
-        amount: Number(amount).toFixed(2),
-        currency: currency,
-        description: "Mr Phone Lebanon Online Purchase"
-      }
-    };
+   const payload = {
+  apiOperation: "INITIATE_CHECKOUT",
+  checkoutMode: "IFRAME",  // 👈 change from WEBSITE to IFRAME
+  interaction: {
+    operation: "PURCHASE",
+    merchant: {
+      name: "Mr Phone Lebanon",
+      url: "https://www.mrphonelb.com"
+    },
+    displayControl: {
+      billingAddress: "HIDE",
+      customerEmail: "HIDE",
+      shipping: "HIDE"
+    },
+    returnUrl: "https://www.mrphonelb.com/client/contents/checkout"
+  },
+  order: {
+    id: orderId,
+    amount: amount,
+    currency: currency,
+    description: "Mr Phone Lebanon Online Purchase"
+  }
+};
+
 
     const response = await axios.post(
       `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
