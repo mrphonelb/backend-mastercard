@@ -19,7 +19,7 @@ app.post("/initiate-checkout", async (req, res) => {
     const { amount, currency, draftId, description } = req.body;
     console.log(`💰 Creating session for ${amount} ${currency} | Draft: ${draftId}`);
 
-   const payload = {
+  const payload = {
   apiOperation: "CREATE_CHECKOUT_SESSION",
   interaction: {
     merchant: {
@@ -27,10 +27,6 @@ app.post("/initiate-checkout", async (req, res) => {
       logo: "https://www.mrphonelb.com/images/logo.png"
     }
   },
-  order: {
-    id: `ORDER-${draftId}`,
-    currency: "USD"
-  }
 };
 
 
