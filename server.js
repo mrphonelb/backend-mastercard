@@ -24,54 +24,70 @@ app.get("/", (req, res) => {
 
 const port = process.env.PORT || 3000;
 
-app.post("/initiate-checkout", async (req, res) => {
-  const { draftId, amount, currency = "USD" } = req.body;
 
-  if (!draftId) {
-    return res.status(400).json({ error: "Missing draftId (invoice ID)" });
-  }
+/* ====================================================
+   💳 INITIATE CHECKOUT — Create Mastercard Session
+   ==================================================== */
+app.post("/initiate-checkout", async (req, res) => {
+  const { amount, currency = "USD", draftId, description, customer } = req.body;
+  const orderId = draftId || `ORDER-${Date.now()}`;
 
   try {
-    console.log(`🧾 Creating Mastercard session for invoice ${draftId}...`);
-
-    const payload = {
-      apiOperation: "INITIATE_CHECKOUT",
-      interaction: {
-        operation: "PURCHASE",
-        returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
-        merchant: {
-          name: "Mr Phone Lebanon",
-          logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png"
-        }
-      },
-      order: {
-        id: draftId,
-        amount: amount,
-        currency: currency
-        // note: no description field
-      }
-    };
+    console.log(`🧾 Creating Mastercard session for order ${orderId}...`);
 
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
-      payload,
+      {
+        apiOperation: "INITIATE_CHECKOUT",
+        interaction: {
+          operation: "PURCHASE",
+          merchant: {
+            name: "Mr. Phone Lebanon",
+            url: "https://www.mrphonelb.com",
+            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+          },
+          locale: "en_US",
+          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
+          displayControl: {
+            billingAddress: "HIDE",
+            shipping: "HIDE",
+            customerEmail: "HIDE",
+          },
+        },
+        order: {
+          id: orderId,
+          amount,
+          currency,
+          description: description || `Order #${orderId} - Mr. Phone Lebanon`,
+        },
+        customer: {
+          firstName: customer?.firstName || "Guest",
+          lastName: customer?.lastName || "Customer",
+          email: customer?.email || "guest@mrphonelb.com",
+          mobilePhone: customer?.phone || "00000000",
+        },
+      },
       {
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
-          password: process.env.API_PASSWORD
+          password: process.env.API_PASSWORD,
         },
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json" },
       }
     );
 
-    const sessionId = response.data.session.id;
-    console.log(`✅ Session created for invoice ${draftId}: ${sessionId}`);
-    return res.json({ sessionId });
-  } catch (err) {
-    console.error("❌ CREATE_CHECKOUT_SESSION failed:", err.response?.data || err.message);
-    return res.status(500).json({
-      error: "Failed to create session",
-      details: err.response?.data || err.message
+    console.log("✅ Mastercard session created:", response.data.session.id);
+
+    res.json({
+      sessionId: response.data.session.id,
+      successIndicator: response.data.successIndicator,
+      orderId,
+    });
+  } catch (error) {
+    console.error("❌ INITIATE_CHECKOUT failed:", error.response?.data || error.message);
+    res.status(500).json({
+      error: "Failed to create Mastercard session",
+      details: error.response?.data || error.message,
     });
   }
 });
