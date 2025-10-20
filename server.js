@@ -4,68 +4,67 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
+app.use(cors());
 app.use(express.json());
-app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
 
+// ✅ Environment variables
+const HOST = process.env.HOST;
+const MERCHANT_ID = process.env.MERCHANT_ID;
+const API_PASSWORD = process.env.API_PASSWORD;
 const PORT = process.env.PORT || 10000;
 
-/* =========================================================
-   ✅ STEP 1 — INITIATE CHECKOUT SESSION
-   ========================================================= */
+app.get("/", (req, res) => {
+  res.send("✅ MrPhone Backend running for Mastercard Hosted Checkout.");
+});
+
 app.post("/create-mastercard-session", async (req, res) => {
   try {
-    const { orderId, amount, currency = "USD", description = "Mr Phone LB Order" } = req.body;
-
+    const { orderId, amount, currency } = req.body;
     if (!orderId || !amount) {
       return res.status(400).json({ error: "Missing orderId or amount" });
     }
 
-    const merchantId = process.env.MERCHANT_ID;
-    const apiPassword = process.env.API_PASSWORD;
-    const auth = Buffer.from(`merchant.${merchantId}:${apiPassword}`).toString("base64");
+    console.log(`💰 Creating Mastercard session for ${amount} ${currency} | Order: ${orderId}`);
 
-    const url = `https://creditlibanais-netcommerce.gateway.mastercard.com/api/rest/version/100/merchant/${merchantId}/session`;
+    const url = `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`;
+    const authHeader =
+      "Basic " + Buffer.from(`merchant.${MERCHANT_ID}:${API_PASSWORD}`).toString("base64");
 
-    const body = {
+    const payload = {
       apiOperation: "INITIATE_CHECKOUT",
       order: {
         id: orderId,
         amount: amount,
         currency: currency,
-        description: description,
       },
       interaction: {
-        operation: "PAY", // Authorize + Capture in one step
+        operation: "AUTHORIZE",
         merchant: {
           name: "Mr Phone LB",
           url: "https://www.mrphonelb.com",
         },
-        returnUrl: "https://www.mrphonelb.com/client/contents/checkout?paid=1",
+        returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
       },
     };
 
-    const response = await axios.post(url, body, {
+    const { data } = await axios.post(url, payload, {
       headers: {
+        "Authorization": authHeader,
         "Content-Type": "application/json",
-        Authorization: `Basic ${auth}`,
       },
     });
 
-    res.json(response.data);
+    console.log("✅ MPGS session created successfully:", data);
+    res.json(data);
   } catch (err) {
-    console.error("❌ Mastercard INITIATE error:", err.response?.data || err.message);
+    console.error("❌ Failed to create Mastercard session:", err.response?.data || err.message);
     res.status(500).json({
-      error: "Failed to create Mastercard session",
+      error: "Failed to create session",
       debug: err.response?.data || err.message,
     });
   }
 });
 
-/* =========================================================
-   🧠 Health Check
-   ========================================================= */
-app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend running for Mastercard Hosted Checkout.");
+app.listen(PORT, () => {
+  console.log(`🚀 MrPhone Backend live on port ${PORT}`);
 });
-
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
