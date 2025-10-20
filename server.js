@@ -14,29 +14,25 @@ const API_URL = process.env.HOST || "https://creditlibanais-netcommerce.gateway.
 
 app.get("/", (_, res) => res.send("✅ MrPhone Backend is running!"));
 
+// /initiate-checkout
 app.post("/initiate-checkout", async (req, res) => {
   try {
-    const { amount, currency, draftId, description } = req.body;
-    console.log(`💰 Creating session for ${amount} ${currency} | Draft: ${draftId}`);
+    const { amount, draftId } = req.body; // amount only for your logs
+    console.log(`💰 Creating session for ${amount} USD | Draft: ${draftId}`);
 
-  const payload = {
-  apiOperation: "CREATE_CHECKOUT_SESSION"
-};
-
+    // Strict minimal payload for Credit Libanais / Hosted Checkout (v72)
+    const payload = { apiOperation: "CREATE_CHECKOUT_SESSION" };
 
     const response = await axios.post(
       `${API_URL}/merchant/${MERCHANT_ID}/session`,
       payload,
       {
-        auth: {
-          username: `merchant.${MERCHANT_ID}`,
-          password: API_PASSWORD
-        },
-        headers: { "Content-Type": "application/json" }
+        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
+        headers: { "Content-Type": "application/json" },
       }
     );
 
-    const session = response.data.session;
+    const { session } = response.data || {};
     if (!session?.id) {
       console.error("❌ No session ID:", response.data);
       return res.status(502).json({ error: "No sessionId", debug: response.data });
@@ -46,10 +42,7 @@ app.post("/initiate-checkout", async (req, res) => {
     res.json({ sessionId: session.id, successIndicator: session.successIndicator });
   } catch (err) {
     console.error("❌ MPGS error:", err.response?.data || err.message);
-    res.status(500).json({
-      error: "Failed to create session",
-      debug: err.response?.data || err.message
-    });
+    res.status(500).json({ error: "Failed to create session", debug: err.response?.data || err.message });
   }
 });
 
