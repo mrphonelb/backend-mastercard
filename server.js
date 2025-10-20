@@ -5,23 +5,20 @@ const cors = require("cors");
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
+app.use(cors({ origin: "*" }));
 
 const PORT = process.env.PORT || 10000;
 
-// Health check
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Mastercard backend running.");
+  res.send("✅ Mastercard Backend running.");
 });
 
-/* ===========================================================
-   💳 INITIATE CHECKOUT SESSION
-   =========================================================== */
+/* =====================================================
+   💳 INITIATE CHECKOUT (CREATE SESSION)
+   ===================================================== */
 app.post("/initiate-checkout", async (req, res) => {
   try {
-    const { amount, orderId } = req.body;
-
-    console.log(`💰 Creating session for ${amount} USD | Draft: ${orderId}`);
+    const { amount } = req.body;
 
     const url = `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`;
 
@@ -29,36 +26,37 @@ app.post("/initiate-checkout", async (req, res) => {
       apiOperation: "INITIATE_CHECKOUT",
       interaction: {
         operation: "AUTHORIZE",
-        merchant: {
-          name: "Mr Phone LB"
-        },
-        // ✅ Redirect customer back to your Daftra checkout after payment
+        merchant: { name: "Mr Phone LB" },
         returnUrl: "https://www.mrphonelb.com/client/contents/checkout?paid=1"
       },
       order: {
-        currency: "USD",
-        amount: amount
+        amount: amount,
+        currency: "USD"
       }
     };
 
-    const authString = Buffer.from(`merchant.${process.env.MERCHANT_ID}:${process.env.API_PASSWORD}`).toString("base64");
+    const auth = Buffer.from(
+      `merchant.${process.env.MERCHANT_ID}:${process.env.API_PASSWORD}`
+    ).toString("base64");
 
     const response = await axios.post(url, body, {
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Basic ${authString}`
+        Authorization: `Basic ${auth}`
       }
     });
 
-    console.log("✅ Session created:", response.data.session.id);
+    console.log("✅ Session Created:", response.data.session.id);
     res.json(response.data);
-  } catch (err) {
-    console.error("❌ MPGS error:", err.response?.data || err.message);
+  } catch (error) {
+    console.error("❌ MPGS error:", error.response?.data || error.message);
     res.status(500).json({
       error: "Failed to create session",
-      debug: err.response?.data || err.message
+      debug: error.response?.data || error.message
     });
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
