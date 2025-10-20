@@ -20,7 +20,7 @@ app.post("/initiate-checkout", async (req, res) => {
     console.log(`💰 Creating session for ${amount} ${currency} | Draft: ${draftId}`);
 
     const payload = {
-      apiOperation: "INITIATE_CHECKOUT",
+      apiOperation: "CREATE_CHECKOUT_SESSION",
       interaction: {
         operation: "PURCHASE",
         returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
