@@ -22,7 +22,7 @@ app.use(
 app.options("*", cors());
 app.use(express.json());
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
 /* ======================================================
    💳 INITIATE CHECKOUT — USE SAME DAFTRA INVOICE ID
@@ -149,6 +149,12 @@ app.get("/payment-result/:orderId", async (req, res) => {
 /* ======================================================
    🚀 START SERVER
    ====================================================== */
+
+   app.get("/", (req, res) => {
+  res.status(200).send("✅ MrPhone Backend Ready");
+});
+
+
 app.listen(port, () => {
   console.log(`✅ Backend running on http://localhost:${port}`);
 });
