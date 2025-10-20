@@ -1,6 +1,10 @@
 {
   "name": "backend-mastercard",
   "version": "1.0.0",
+  "engines": {
+  "node": "20.x"
+},
+
   "description": "",
   "main": "index.js",
   "scripts": {

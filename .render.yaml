@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mrphone-backend
+    env: node
+    plan: starter
+    buildCommand: "npm install"
+    startCommand: "node server.js"
+    autoDeploy: true
+    disk:
+      name: node-cache
+      mountPath: /opt/render/project/src/node_modules
+      sizeGB: 1
