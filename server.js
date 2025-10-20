@@ -22,9 +22,14 @@ app.use(express.json());
    ✅ BASIC LOGGING
    ==================================================== */
 app.use((req, res, next) => {
-  console.log(`➡️  ${req.method} ${req.url}`);
+  // Skip repeated Render health checks or root GETs
+  if (req.url === "/" && req.method === "GET") return next();
+
+  const origin = req.headers.origin || "undefined";
+  console.log(`➡️  ${req.method} ${req.url} | From Origin: ${origin}`);
   next();
 });
+
 
 /* ====================================================
    ⚙️ SERVER CONFIG
