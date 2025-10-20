@@ -20,17 +20,8 @@ app.post("/initiate-checkout", async (req, res) => {
     console.log(`💰 Creating session for ${amount} ${currency} | Draft: ${draftId}`);
 
   const payload = {
-  apiOperation: "CREATE_CHECKOUT_SESSION",
-  interaction: {
-    merchant: {
-      name: "Mr. Phone LB",
-      logo: "https://www.mrphonelb.com/images/logo.png"
-    }
-  },
+  apiOperation: "CREATE_CHECKOUT_SESSION"
 };
-
-
-
 
 
     const response = await axios.post(
