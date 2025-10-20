@@ -20,22 +20,22 @@ app.post("/initiate-checkout", async (req, res) => {
     console.log(`💰 Creating session for ${amount} ${currency} | Draft: ${draftId}`);
 
     const payload = {
-      apiOperation: "CREATE_CHECKOUT_SESSION",
-      interaction: {
-        operation: "PURCHASE",   // or "AUTHORIZE" if you capture later
-        returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
-        merchant: {
-          name: "Mr. Phone LB",
-          logo: "https://www.mrphonelb.com/images/logo.png"
-        }
-      },
-      order: {
-        id: `ORDER-${draftId}`,
-        amount: parseFloat(amount).toFixed(2),
-        currency: currency || "USD",
-        description: description || `MrPhone order ${draftId}`
-      }
-    };
+  apiOperation: "CREATE_CHECKOUT_SESSION",
+  interaction: {
+    operation: "PURCHASE",
+    returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
+    merchant: {
+      name: "Mr. Phone LB",
+      logo: "https://www.mrphonelb.com/images/logo.png"
+    }
+  },
+  order: {
+    id: `ORDER-${draftId}`,
+    amount: parseFloat(amount).toFixed(2),
+    currency: currency || "USD"
+  }
+};
+
 
     const response = await axios.post(
       `${API_URL}/merchant/${MERCHANT_ID}/session`,
