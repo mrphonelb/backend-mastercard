@@ -37,7 +37,7 @@ app.post("/create-mastercard-session", async (req, res) => {
           billingAddress: "HIDE",
           customerEmail: "MANDATORY"
         },
-        logo: "https://www.mrphonelb.com/frontend/images/logo.webp"
+        logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png"
       },
       order: {
         id: orderId,
