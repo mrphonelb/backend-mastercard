@@ -14,7 +14,7 @@ const API_PASSWORD = process.env.API_PASSWORD;
 const PORT = process.env.PORT || 10000;
 
 /* ====================================================
-   💳 Create Mastercard Checkout Session
+   💳 Create Mastercard Checkout Session (Updated)
    ==================================================== */
 app.post("/create-mastercard-session", async (req, res) => {
   try {
@@ -26,26 +26,35 @@ app.post("/create-mastercard-session", async (req, res) => {
 
     console.log(`💰 Creating Mastercard session for ${amount} ${currency} | Order: ${orderId}`);
 
+    // ✅ Clean payload for Mastercard API (v67+ compliant)
     const payload = {
       apiOperation: "INITIATE_CHECKOUT",
+      checkoutMode: "WEBSITE",
       interaction: {
         operation: "PURCHASE",
         merchant: {
-          name: "MrPhone Lebanon"
+          name: "Mr Phone Lebanon",
+          url: "https://www.mrphonelb.com"
         },
         displayControl: {
           billingAddress: "HIDE",
-          customerEmail: "MANDATORY"
-        }
+          customerEmail: "HIDE",
+          shipping: "HIDE",
+          orderSummary: "SHOW",
+          paymentTerms: "HIDE"
+        },
+        returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
+        locale: "en_US"
       },
       order: {
         id: orderId,
         amount: amount,
         currency: currency,
-        description: "MrPhoneLB Online Purchase"
+        description: "Mr Phone Lebanon Online Purchase"
       }
     };
 
+    // ✅ POST to Mastercard Gateway
     const response = await axios.post(
       `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
       payload,
@@ -73,7 +82,7 @@ app.post("/create-mastercard-session", async (req, res) => {
    🧠 Health Check
    ==================================================== */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend ready for Mastercard Hosted Checkout.");
+  res.send("✅ MrPhone Backend ready for Mastercard Hosted Checkout (Embedded).");
 });
 
 /* ====================================================
