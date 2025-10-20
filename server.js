@@ -6,42 +6,33 @@ const cors = require("cors");
 const app = express();
 
 /* ======================================================
-   🌐 SECURE CORS SETUP
+   🌐 CORS
    ====================================================== */
 app.use(
   cors({
     origin: [
-      "https://www.mrphonelb.com", // ✅ Live website
-      "https://mrphone-backend.onrender.com", // ✅ Backend host
-      "http://localhost:3000", // ✅ Local dev
+      "https://www.mrphonelb.com",
+      "https://mrphone-backend.onrender.com",
+      "http://localhost:3000",
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "APIKEY"],
-    credentials: true,
   })
 );
-
 app.options("*", cors());
 app.use(express.json());
-
-/* ======================================================
-   🧠 HEALTH CHECK
-   ====================================================== */
-app.get("/", (_, res) => {
-  res.send("✅ MrPhone Backend Ready for Mastercard Hosted Checkout!");
-});
 
 const port = process.env.PORT || 3000;
 
 /* ======================================================
-   💳 INITIATE CHECKOUT
+   💳 INITIATE CHECKOUT — USE SAME DAFTRA INVOICE ID
    ====================================================== */
 app.post("/initiate-checkout", async (req, res) => {
-  const { amount, currency = "USD", draftId, description, customer } = req.body;
-  const orderId = draftId || `ORDER-${Date.now()}`;
+  const { draftId, amount, currency = "USD", description, customer } = req.body;
+  const orderId = draftId?.toString() || `ORDER-${Date.now()}`;
 
   try {
-    console.log(`🧾 Creating Mastercard session for order ${orderId}...`);
+    console.log(`🧾 Creating Mastercard session for Daftra invoice ${orderId}...`);
 
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
@@ -64,10 +55,10 @@ app.post("/initiate-checkout", async (req, res) => {
           },
         },
         order: {
-          id: orderId,
+          id: orderId, // ✅ SAME AS DAFTRA INVOICE
           amount,
           currency,
-          description: description || `Order #${orderId} - Mr. Phone Lebanon`,
+          description: description || `Daftra Invoice #${orderId} - Mr. Phone Lebanon`,
         },
         customer: {
           firstName: customer?.firstName || "Guest",
@@ -86,17 +77,10 @@ app.post("/initiate-checkout", async (req, res) => {
     );
 
     const sessionId = response.data.session.id;
-    console.log("✅ Mastercard session created:", sessionId);
-
-    res.json({
-      sessionId,
-      orderId,
-    });
+    console.log(`✅ Mastercard session created for invoice ${orderId}: ${sessionId}`);
+    res.json({ sessionId, orderId });
   } catch (error) {
-    console.error(
-      "❌ INITIATE_CHECKOUT failed:",
-      error.response?.data || error.message
-    );
+    console.error("❌ INITIATE_CHECKOUT failed:", error.response?.data || error.message);
     res.status(500).json({
       error: "Failed to create Mastercard session",
       details: error.response?.data || error.message,
@@ -105,7 +89,7 @@ app.post("/initiate-checkout", async (req, res) => {
 });
 
 /* ======================================================
-   💳 DIRECT REDIRECT ROUTE (for popup)
+   💳 REDIRECT TO PAYMENT PAGE (popup)
    ====================================================== */
 app.get("/checkout/pay/:sessionId", (req, res) => {
   const { sessionId } = req.params;
@@ -114,13 +98,13 @@ app.get("/checkout/pay/:sessionId", (req, res) => {
 });
 
 /* ======================================================
-   💰 PAYMENT RESULT HANDLER
+   💰 PAYMENT RESULT HANDLER — POSTS SUCCESS/FAIL
    ====================================================== */
 app.get("/payment-result/:orderId", async (req, res) => {
   const { orderId } = req.params;
 
   try {
-    console.log(`🔍 Verifying payment for ${orderId}...`);
+    console.log(`🔍 Verifying payment for Daftra invoice ${orderId}...`);
 
     const verify = await axios.get(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
@@ -133,22 +117,20 @@ app.get("/payment-result/:orderId", async (req, res) => {
       }
     );
 
-    const data = verify.data;
-    const result = data.result?.toUpperCase() || "UNKNOWN";
+    const result = verify.data.result?.toUpperCase() || "UNKNOWN";
     console.log(`💬 Payment result for ${orderId}: ${result}`);
 
     if (result === "SUCCESS") {
-      // ✅ Notify parent window, close payment tab
       return res.send(`
         <script>
-          window.opener.postMessage("SUCCESS", "*");
+          window.opener.postMessage("SUCCESS-${orderId}", "*");
           window.close();
         </script>
       `);
     } else {
       return res.send(`
         <script>
-          window.opener.postMessage("FAILURE", "*");
+          window.opener.postMessage("FAILURE-${orderId}", "*");
           window.close();
         </script>
       `);
@@ -157,7 +139,7 @@ app.get("/payment-result/:orderId", async (req, res) => {
     console.error("❌ Verification failed:", err.message);
     return res.send(`
       <script>
-        window.opener.postMessage("FAILURE", "*");
+        window.opener.postMessage("FAILURE-${orderId}", "*");
         window.close();
       </script>
     `);
@@ -168,5 +150,5 @@ app.get("/payment-result/:orderId", async (req, res) => {
    🚀 START SERVER
    ====================================================== */
 app.listen(port, () => {
-  console.log(`✅ Server running on http://localhost:${port}`);
+  console.log(`✅ Backend running on http://localhost:${port}`);
 });
