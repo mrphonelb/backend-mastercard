@@ -41,23 +41,23 @@ app.post("/initiate-checkout", async (req, res) => {
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
-        apiOperation: "INITIATE_CHECKOUT",
+        apiOperation: "CREATE_CHECKOUT_SESSION", // ✅ Correct operation
         interaction: {
           operation: "PURCHASE",
+          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
           merchant: {
             name: "Mr Phone Lebanon",
             url: "https://www.mrphonelb.com",
             logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
-          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
           displayControl: {
             billingAddress: "HIDE",
-            shipping: "HIDE",
             customerEmail: "HIDE",
+            shipping: "HIDE",
           },
         },
         order: {
-          id: draftId, // ✅ same invoice ID
+          id: draftId, // ✅ use same Daftra invoice ID
           amount,
           currency,
           description: `Invoice #${draftId} – MrPhone Lebanon`,
@@ -77,13 +77,19 @@ app.post("/initiate-checkout", async (req, res) => {
     console.log(`✅ Session created for invoice ${draftId}: ${sessionId}`);
     res.json({ sessionId });
   } catch (err) {
-    console.error("❌ INITIATE_CHECKOUT failed:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to create session" });
+    console.error(
+      "❌ INITIATE_CHECKOUT failed:",
+      err.response?.data || err.message
+    );
+    res.status(500).json({
+      error: "Failed to create session",
+      details: err.response?.data || err.message,
+    });
   }
 });
 
 /* ======================================================
-   💰 VERIFY RESULT & CLOSE POPUP
+   💰 VERIFY PAYMENT RESULT
    ====================================================== */
 app.get("/payment-result/:draftId", async (req, res) => {
   const { draftId } = req.params;
