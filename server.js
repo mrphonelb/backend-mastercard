@@ -21,38 +21,37 @@ app.post("/create-mastercard-session", async (req, res) => {
 
     console.log(`💰 Creating Mastercard session for ${amount} ${currency} | Order: ${orderId}`);
 
-    const payload = {
-      apiOperation: "CREATE_CHECKOUT_SESSION",
-      order: {
-        amount: Number(amount).toFixed(2),
-        currency,
-        description: "Mr Phone Lebanon Online Purchase"
-      },
-      interaction: {
-        operation: "PURCHASE",
-        merchant: {
-          name: "Mr Phone Lebanon",
-          url: "https://www.mrphonelb.com"
-        },
-        displayControl: {
-          billingAddress: "HIDE",
-          shipping: "HIDE",
-          customerEmail: "HIDE"
-        }
-      }
-    };
+   const payload = {
+  apiOperation: "INITIATE_CHECKOUT",  // if your gateway uses this
+  interaction: {
+    operation: "PURCHASE",
+    merchant: {
+      name: "Mr Phone Lebanon",
+      url: "https://www.mrphonelb.com"
+    },
+    displayControl: {
+      billingAddress: "HIDE",
+      shipping: "HIDE",
+      customerEmail: "HIDE"
+    }
+  },
+  order: {
+    id: orderId,
+    amount: Number(amount).toFixed(2),
+    currency,
+    description: "Mr Phone Lebanon Online Purchase"
+  }
+};
 
-    const response = await axios.post(
-      `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/order/${orderId}`,
-      payload,
-      {
-        auth: {
-          username: `merchant.${MERCHANT_ID}`,
-          password: API_PASSWORD
-        },
-        headers: { "Content-Type": "application/json" }
-      }
-    );
+const response = await axios.post(
+  `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,  // or “/order/{orderId}” if required
+  payload,
+  {
+    auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
+    headers: { "Content-Type": "application/json" }
+  }
+);
+
 
     console.log("✅ Mastercard Session Created:", response.data);
     res.json({
