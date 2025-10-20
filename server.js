@@ -30,7 +30,7 @@ const port = process.env.PORT || 3000;
    💳 CREATE MASTERCARD SESSION — SAME INVOICE ID
    ====================================================== */
 app.post("/initiate-checkout", async (req, res) => {
-  const { draftId, amount, currency = "USD", customer } = req.body;
+  const { draftId, amount, currency = "USD" } = req.body;
 
   if (!draftId)
     return res.status(400).json({ error: "Missing draftId (invoice ID)" });
@@ -47,7 +47,6 @@ app.post("/initiate-checkout", async (req, res) => {
           returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
           merchant: {
             name: "Mr Phone Lebanon",
-            // ❌ removed url (not supported)
             logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
           displayControl: {
@@ -62,7 +61,7 @@ app.post("/initiate-checkout", async (req, res) => {
           currency,
           description: `Invoice #${draftId} – MrPhone Lebanon`,
         },
-        customer,
+        // ❌ Removed 'customer' object (NetCommerce doesn't support it)
       },
       {
         auth: {
