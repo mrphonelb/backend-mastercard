@@ -31,10 +31,10 @@ app.post("/initiate-checkout", async (req, res) => {
   },
   order: {
     id: `ORDER-${draftId}`,
-    amount: parseFloat(amount).toFixed(2),
-    currency: currency || "USD"
+    currency: "USD"
   }
 };
+
 
 
     const response = await axios.post(
