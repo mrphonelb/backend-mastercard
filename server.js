@@ -120,6 +120,9 @@ app.get("/payment-result/:draftId", async (req, res) => {
 }
 
 
-app.listen(port, () =>
-  console.log(`✅ Backend running on http://localhost:${port}`)
-);
+/* ====================================================
+   🚀 START SERVER
+   ==================================================== */
+app.listen(port, () => {
+  console.log(`✅ Backend running on http://localhost:${port}`);
+});
