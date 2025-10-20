@@ -7,17 +7,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ====================================================
-   ✅ ENV Variables
-   ==================================================== */
+/* ================================
+   ✅ Environment Variables
+   ================================ */
 const HOST = process.env.HOST; // https://creditlibanais-netcommerce.gateway.mastercard.com
 const MERCHANT_ID = process.env.MERCHANT_ID; // TEST06263500
 const API_PASSWORD = process.env.API_PASSWORD; // your API password
 const PORT = process.env.PORT || 10000;
 
-/* ====================================================
+/* ================================
    💳 Create Mastercard Checkout Session
-   ==================================================== */
+   ================================ */
 app.post("/create-mastercard-session", async (req, res) => {
   try {
     const { orderId, amount, currency } = req.body;
@@ -35,19 +35,20 @@ app.post("/create-mastercard-session", async (req, res) => {
         interaction: {
           operation: "PURCHASE",
           merchant: {
-            name: "MrPhone Lebanon",
-            address: { line1: "Lebanon" }
+            name: "MrPhone Lebanon"
           },
           displayControl: {
-            billingAddress: "HIDE", // ✅ hides billing section
+            billingAddress: "HIDE", // ✅ Hide billing info
             customerEmail: "MANDATORY"
           },
-          style: {
-            logo: "https://www.mrphonelb.com/frontend/images/logo.webp", // ✅ your logo
-            accentColor: "#d9498e", // ✅ brand color
-            buttonBackground: "#d9498e",
-            buttonText: "#ffffff"
-          }
+          // ✅ Use this supported logo placement
+          merchantDescriptor: {
+            name: "MrPhone Lebanon",
+            addressLine1: "Lebanon",
+            phone: "+96176143163"
+          },
+          // ✅ Provide a logo as part of the checkout experience
+          logo: "https://www.mrphonelb.com/frontend/images/logo.webp"
         },
         order: {
           id: orderId,
@@ -78,16 +79,16 @@ app.post("/create-mastercard-session", async (req, res) => {
   }
 });
 
-/* ====================================================
+/* ================================
    🧠 Health Check
-   ==================================================== */
+   ================================ */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend running for Mastercard Hosted Checkout.");
+  res.send("✅ MrPhone Backend ready for Mastercard Hosted Checkout.");
 });
 
-/* ====================================================
+/* ================================
    🚀 Start Server
-   ==================================================== */
+   ================================ */
 app.listen(PORT, () => {
   console.log(`✅ MrPhone backend running on port ${PORT}`);
 });
