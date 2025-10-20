@@ -103,25 +103,22 @@ app.get("/payment-result/:draftId", async (req, res) => {
     console.log(`💬 Payment result for ${draftId}: ${result}`);
 
     if (result === "SUCCESS") {
-      // ✅ Mark draft as paid
-      await axios.put(
-        `https://www.mrphonelb.com/api2/invoices/${draftId}.json`,
-        { status: "paid" },
-        { headers: { APIKEY: process.env.DAFTRA_API_KEY } }
-      );
+  // ✅ Notify parent window (the checkout tab)
+  return res.send(`
+    <script>
+      window.opener.postMessage("SUCCESS", "*");
+      window.close();
+    </script>
+  `);
+} else {
+  return res.send(`
+    <script>
+      window.opener.postMessage("FAILURE", "*");
+      window.close();
+    </script>
+  `);
+}
 
-      return res.redirect(
-        `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${draftId}`
-      );
-    } else {
-      // ❌ Failed or canceled — redirect to error page
-      return res.redirect("https://www.mrphonelb.com/client/contents/payment_error");
-    }
-  } catch (err) {
-    console.error("❌ Payment verification failed:", err.message);
-    return res.redirect("https://www.mrphonelb.com/client/contents/payment_error");
-  }
-});
 
 app.listen(port, () =>
   console.log(`✅ Backend running on http://localhost:${port}`)
