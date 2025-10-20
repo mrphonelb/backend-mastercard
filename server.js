@@ -35,7 +35,7 @@ app.post("/initiate-checkout", async (req, res) => {
     console.log(`🧾 Creating Mastercard session for invoice ${draftId}...`);
 
     const payload = {
-      apiOperation: "CREATE_CHECKOUT_SESSION",
+      apiOperation: "INITIATE_CHECKOUT",
       interaction: {
         operation: "PURCHASE",
         returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
