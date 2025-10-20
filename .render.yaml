@@ -6,6 +6,7 @@ services:
     buildCommand: "npm install"
     startCommand: "node server.js"
     autoDeploy: true
+    healthCheckPath: /
     disk:
       name: node-cache
       mountPath: /opt/render/project/src/node_modules
