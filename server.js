@@ -4,48 +4,61 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-app.use(cors({ origin: "*", methods: ["GET","POST","OPTIONS"], allowedHeaders: ["Content-Type","Authorization"] }));
 app.use(express.json());
+app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
 
-const PORT = process.env.PORT || 3000;
-const MERCHANT_ID = process.env.MERCHANT_ID || "TEST06263500";
-const API_PASSWORD = process.env.API_PASSWORD;
-const API_URL = process.env.HOST || "https://creditlibanais-netcommerce.gateway.mastercard.com/api/rest/version/72";
+const PORT = process.env.PORT || 10000;
 
-app.get("/", (_, res) => res.send("✅ MrPhone Backend is running!"));
+// Health check
+app.get("/", (req, res) => {
+  res.send("✅ MrPhone Mastercard backend running.");
+});
 
-// /initiate-checkout
+/* ===========================================================
+   💳 INITIATE CHECKOUT SESSION
+   =========================================================== */
 app.post("/initiate-checkout", async (req, res) => {
   try {
-    const { amount, draftId } = req.body; // amount only for your logs
-    console.log(`💰 Creating session for ${amount} USD | Draft: ${draftId}`);
+    const { amount, orderId } = req.body;
 
-    // Strict minimal payload for Credit Libanais / Hosted Checkout (v72)
-    const payload = { apiOperation: "CREATE_CHECKOUT_SESSION" };
+    console.log(`💰 Creating session for ${amount} USD | Draft: ${orderId}`);
 
-    const response = await axios.post(
-      `${API_URL}/merchant/${MERCHANT_ID}/session`,
-      payload,
-      {
-        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
-        headers: { "Content-Type": "application/json" },
+    const url = `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`;
+
+    const body = {
+      apiOperation: "INITIATE_CHECKOUT",
+      interaction: {
+        operation: "AUTHORIZE",
+        merchant: {
+          name: "Mr Phone LB"
+        },
+        // ✅ Redirect customer back to your Daftra checkout after payment
+        returnUrl: "https://www.mrphonelb.com/client/contents/checkout?paid=1"
+      },
+      order: {
+        currency: "USD",
+        amount: amount
       }
-    );
+    };
 
-    const { session } = response.data || {};
-    if (!session?.id) {
-      console.error("❌ No session ID:", response.data);
-      return res.status(502).json({ error: "No sessionId", debug: response.data });
-    }
+    const authString = Buffer.from(`merchant.${process.env.MERCHANT_ID}:${process.env.API_PASSWORD}`).toString("base64");
 
-    console.log("✅ Session created:", session.id);
-    res.json({ sessionId: session.id, successIndicator: session.successIndicator });
+    const response = await axios.post(url, body, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${authString}`
+      }
+    });
+
+    console.log("✅ Session created:", response.data.session.id);
+    res.json(response.data);
   } catch (err) {
     console.error("❌ MPGS error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to create session", debug: err.response?.data || err.message });
+    res.status(500).json({
+      error: "Failed to create session",
+      debug: err.response?.data || err.message
+    });
   }
 });
 
-
-
-app.listen(PORT, () => console.log(`🚀 MrPhone Backend running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
