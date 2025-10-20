@@ -5,9 +5,9 @@ const cors = require("cors");
 
 const app = express();
 
-/* ================================================
-   🌐 CORS CONFIG
-   ================================================ */
+/* ======================================================
+   🌐 CORS
+   ====================================================== */
 app.use(
   cors({
     origin: [
@@ -15,37 +15,24 @@ app.use(
       "https://mrphone-backend.onrender.com",
       "http://localhost:3000",
     ],
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization", "APIKEY"],
   })
 );
-
-app.options("*", cors());
 app.use(express.json());
-
-app.use((req, _, next) => {
-  console.log(`➡️ ${req.method} ${req.url}`);
-  next();
-});
 
 const port = process.env.PORT || 10000;
 
-/* ================================================
-   🩺 HEALTH CHECK
-   ================================================ */
-app.get("/", (_, res) =>
-  res.send("✅ MrPhone Backend Running - Mastercard Redirect Flow")
-);
+app.get("/", (_, res) => res.send("✅ MrPhone Backend Ready"));
 
-/* ================================================
-   💳 INITIATE CHECKOUT (redirect-based)
-   ================================================ */
+/* ======================================================
+   💳 INITIATE CHECKOUT AFTER DAFTRA DRAFT CREATED
+   ====================================================== */
 app.post("/initiate-checkout", async (req, res) => {
-  const { amount, currency = "USD", draftId, description, customer } = req.body;
-  const orderId = draftId || `ORDER-${Date.now()}`;
+  const { draftId, amount, currency = "USD", description, customer } = req.body;
 
   try {
-    console.log(`🧾 Creating Mastercard session for ${orderId}...`);
+    console.log(`🧾 Creating Mastercard session for draft ${draftId}...`);
 
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
@@ -56,10 +43,11 @@ app.post("/initiate-checkout", async (req, res) => {
           merchant: {
             name: "Mr. Phone Lebanon",
             url: "https://www.mrphonelb.com",
-            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+            logo:
+              "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
           locale: "en_US",
-          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
+          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
           displayControl: {
             billingAddress: "HIDE",
             shipping: "HIDE",
@@ -67,17 +55,12 @@ app.post("/initiate-checkout", async (req, res) => {
           },
         },
         order: {
-          id: orderId,
+          id: draftId,
           amount,
           currency,
-          description: description || `Order #${orderId} - Mr. Phone Lebanon`,
+          description: description || `Draft #${draftId} - MrPhone Lebanon`,
         },
-        customer: {
-          firstName: customer?.firstName || "Guest",
-          lastName: customer?.lastName || "Customer",
-          email: customer?.email || "guest@mrphonelb.com",
-          mobilePhone: customer?.phone || "00000000",
-        },
+        customer,
       },
       {
         auth: {
@@ -91,25 +74,22 @@ app.post("/initiate-checkout", async (req, res) => {
     const sessionId = response.data.session.id;
     console.log("✅ Session created:", sessionId);
 
-    res.json({ sessionId, orderId });
-  } catch (error) {
-    console.error(
-      "❌ INITIATE_CHECKOUT failed:",
-      error.response?.data || error.message
-    );
+    res.json({ sessionId });
+  } catch (err) {
+    console.error("❌ INITIATE_CHECKOUT failed:", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to create Mastercard session" });
   }
 });
 
-/* ================================================
-   💰 PAYMENT RESULT
-   ================================================ */
-app.get("/payment-result/:orderId", async (req, res) => {
-  const { orderId } = req.params;
+/* ======================================================
+   💰 PAYMENT RESULT HANDLER
+   ====================================================== */
+app.get("/payment-result/:draftId", async (req, res) => {
+  const { draftId } = req.params;
 
   try {
     const verify = await axios.get(
-      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
+      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${draftId}`,
       {
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
@@ -120,29 +100,29 @@ app.get("/payment-result/:orderId", async (req, res) => {
     );
 
     const result = verify.data.result?.toUpperCase() || "UNKNOWN";
-    console.log(`💬 Payment result for ${orderId}: ${result}`);
+    console.log(`💬 Payment result for ${draftId}: ${result}`);
 
     if (result === "SUCCESS") {
-      // ✅ Redirect back to checkout page for auto "Place Order"
+      // ✅ Mark draft as paid
+      await axios.put(
+        `https://www.mrphonelb.com/api2/invoices/${draftId}.json`,
+        { status: "paid" },
+        { headers: { APIKEY: process.env.DAFTRA_API_KEY } }
+      );
+
       return res.redirect(
-        "https://www.mrphonelb.com/client/contents/checkout?paid=true"
+        `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${draftId}`
       );
     } else {
-      return res.redirect(
-        "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
-      );
+      // ❌ Failed or canceled — redirect to error page
+      return res.redirect("https://www.mrphonelb.com/client/contents/payment_error");
     }
   } catch (err) {
     console.error("❌ Payment verification failed:", err.message);
-    return res.redirect(
-      "https://www.mrphonelb.com/client/invoices/pay?source=website_front"
-    );
+    return res.redirect("https://www.mrphonelb.com/client/contents/payment_error");
   }
 });
 
-/* ================================================
-   🚀 START SERVER
-   ================================================ */
 app.listen(port, () =>
   console.log(`✅ Backend running on http://localhost:${port}`)
 );
