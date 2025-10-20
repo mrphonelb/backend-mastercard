@@ -19,7 +19,7 @@ app.use(
 );
 
 app.use(express.json());
-const port = process.env.PORT || 10000;
+const port = process.env.PORT || 3000;
 
 /* ======================================================
    💳 INITIATE CHECKOUT (USE SAME DAFTRA INVOICE ID)
@@ -133,6 +133,7 @@ app.get("/payment-result/:orderId", async (req, res) => {
 /* ======================================================
    🚀 START SERVER
    ====================================================== */
-app.listen(port, () => {
-  console.log(`✅ Backend running on http://localhost:${port}`);
+
+app.listen(port, "0.0.0.0", () => {
+  console.log(`✅ Backend running on port ${port}`);
 });
