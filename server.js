@@ -41,13 +41,13 @@ app.post("/initiate-checkout", async (req, res) => {
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
-        apiOperation: "CREATE_CHECKOUT_SESSION", // ✅ Correct operation
+        apiOperation: "CREATE_CHECKOUT_SESSION",
         interaction: {
           operation: "PURCHASE",
           returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
           merchant: {
             name: "Mr Phone Lebanon",
-            url: "https://www.mrphonelb.com",
+            // ❌ removed url (not supported)
             logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
           displayControl: {
@@ -57,7 +57,7 @@ app.post("/initiate-checkout", async (req, res) => {
           },
         },
         order: {
-          id: draftId, // ✅ use same Daftra invoice ID
+          id: draftId,
           amount,
           currency,
           description: `Invoice #${draftId} – MrPhone Lebanon`,
@@ -78,7 +78,7 @@ app.post("/initiate-checkout", async (req, res) => {
     res.json({ sessionId });
   } catch (err) {
     console.error(
-      "❌ INITIATE_CHECKOUT failed:",
+      "❌ CREATE_CHECKOUT_SESSION failed:",
       err.response?.data || err.message
     );
     res.status(500).json({
