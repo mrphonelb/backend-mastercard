@@ -4,52 +4,90 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
-const HOST = process.env.HOST; // https://creditlibanais-netcommerce.gateway.mastercard.com/
-const MERCHANT_ID = process.env.MERCHANT_ID; // TEST06263500
-const API_PASSWORD = process.env.API_PASSWORD;
+/* ====================================================
+   🧩 BASIC CONFIG
+   ==================================================== */
+app.use(express.json());
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+app.options("*", cors());
+
+app.use((req, res, next) => {
+  console.log(`➡️  ${req.method} ${req.url}`);
+  next();
+});
+
 const PORT = process.env.PORT || 10000;
 
-// Health-check
+/* ====================================================
+   ✅ HEALTH CHECK
+   ==================================================== */
 app.get("/", (req, res) => {
   res.send("✅ MrPhone Backend running for Mastercard Hosted Checkout.");
 });
 
-// Create Hosted Checkout Session
+/* ====================================================
+   💳 CREATE MASTERCARD SESSION
+   ==================================================== */
 app.post("/create-mastercard-session", async (req, res) => {
   try {
     const { orderId, amount, currency } = req.body;
-    if (!orderId || !amount || !currency)
-      return res.status(400).json({ error: "Missing orderId, amount, or currency" });
 
-    console.log(`💳 Creating session for ${amount} ${currency} | Order ${orderId}`);
+    if (!orderId || !amount) {
+      console.error("❌ Missing orderId or amount in request body");
+      return res.status(400).json({ error: "Missing orderId or amount" });
+    }
 
-    const url = `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`;
-    const auth =
-      "Basic " + Buffer.from(`merchant.${MERCHANT_ID}:${API_PASSWORD}`).toString("base64");
+    console.log(`💰 Creating Mastercard session for ${amount} ${currency || "USD"} | Order: ${orderId}`);
 
+    // Payload following NetCommerce INITIATE_CHECKOUT schema
     const payload = {
       apiOperation: "INITIATE_CHECKOUT",
       interaction: {
-        operation: "PURCHASE", // or AUTHORIZE if you capture later
-        returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
-        merchant: { name: "Mr Phone LB", url: "https://www.mrphonelb.com" }
+        operation: "PURCHASE",
+        returnUrl: "https://www.mrphonelb.com/client/contents/checkout"
       },
-      order: { id: orderId, amount: amount, currency: currency }
+      order: {
+        id: orderId,
+        amount: parseFloat(amount).toFixed(2),
+        currency: currency || "USD"
+      }
     };
 
-    const { data } = await axios.post(url, payload, {
-      headers: { Authorization: auth, "Content-Type": "application/json" }
+    // API endpoint
+    const endpoint = `${process.env.HOST}/api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`;
+
+    // POST request
+    const response = await axios.post(endpoint, payload, {
+      auth: {
+        username: `merchant.${process.env.MERCHANT_ID}`,
+        password: process.env.API_PASSWORD
+      },
+      headers: { "Content-Type": "application/json" }
     });
 
-    console.log("✅ Session created:", data);
-    res.json(data);
-  } catch (err) {
-    console.error("❌ Session creation failed:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to create session", debug: err.response?.data });
+    console.log("✅ Session Created Successfully:", response.data);
+
+    res.json(response.data);
+  } catch (error) {
+    const errData = error.response?.data || error.message;
+    console.error("❌ MPGS session creation failed:", errData);
+
+    res.status(400).json({
+      error: "Failed to create session",
+      debug: errData
+    });
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 Backend live on port ${PORT}`));
+/* ====================================================
+   🚀 START SERVER
+   ==================================================== */
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
