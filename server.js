@@ -5,7 +5,9 @@ const cors = require("cors");
 
 const app = express();
 
-/* 🌐 Allow Daftra and your domain */
+/* ======================================================
+   🌐 CORS + HEALTH CHECK
+   ====================================================== */
 app.use(
   cors({
     origin: [
@@ -13,31 +15,29 @@ app.use(
       "https://mrphone-backend.onrender.com",
       "http://localhost:3000",
     ],
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "APIKEY"],
   })
 );
-
+app.options("*", cors());
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.status(200).send("✅ MrPhone Backend Ready");
-});
-
+app.get("/", (req, res) => res.status(200).send("✅ MrPhone Backend Ready"));
 
 const port = process.env.PORT || 3000;
 
 /* ======================================================
-   💳 INITIATE CHECKOUT (USE SAME DAFTRA INVOICE ID)
+   💳 CREATE MASTERCARD SESSION — SAME INVOICE ID
    ====================================================== */
 app.post("/initiate-checkout", async (req, res) => {
   const { draftId, amount, currency = "USD", customer } = req.body;
-  if (!draftId) return res.status(400).json({ error: "Missing draftId (invoice ID)" });
 
-  const orderId = draftId.toString(); // ✅ same as Daftra invoice
-  console.log(`🧾 Creating Mastercard session for Daftra invoice ${orderId}...`);
+  if (!draftId)
+    return res.status(400).json({ error: "Missing draftId (invoice ID)" });
 
   try {
+    console.log(`🧾 Creating Mastercard session for invoice ${draftId}...`);
+
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
@@ -45,13 +45,11 @@ app.post("/initiate-checkout", async (req, res) => {
         interaction: {
           operation: "PURCHASE",
           merchant: {
-            name: "Mr. Phone Lebanon",
+            name: "Mr Phone Lebanon",
             url: "https://www.mrphonelb.com",
-            logo:
-              "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
-          locale: "en_US",
-          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
+          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
           displayControl: {
             billingAddress: "HIDE",
             shipping: "HIDE",
@@ -59,17 +57,12 @@ app.post("/initiate-checkout", async (req, res) => {
           },
         },
         order: {
-          id: orderId, // ✅ EXACT Daftra invoice ID
+          id: draftId, // ✅ same invoice ID
           amount,
           currency,
-          description: `Payment for Invoice #${orderId}`,
+          description: `Invoice #${draftId} – MrPhone Lebanon`,
         },
-        customer: {
-          firstName: customer?.firstName || "Guest",
-          lastName: customer?.lastName || "Customer",
-          email: customer?.email || "guest@mrphonelb.com",
-          mobilePhone: customer?.phone || "00000000",
-        },
+        customer,
       },
       {
         auth: {
@@ -81,55 +74,54 @@ app.post("/initiate-checkout", async (req, res) => {
     );
 
     const sessionId = response.data.session.id;
-    console.log(`✅ Mastercard session created for invoice ${orderId}: ${sessionId}`);
-    res.json({ sessionId, orderId });
+    console.log(`✅ Session created for invoice ${draftId}: ${sessionId}`);
+    res.json({ sessionId });
   } catch (err) {
     console.error("❌ INITIATE_CHECKOUT failed:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to create Mastercard session" });
+    res.status(500).json({ error: "Failed to create session" });
   }
 });
 
 /* ======================================================
-   💰 PAYMENT RESULT HANDLER
+   💰 VERIFY RESULT & CLOSE POPUP
    ====================================================== */
-app.get("/payment-result/:orderId", async (req, res) => {
-  const { orderId } = req.params;
+app.get("/payment-result/:draftId", async (req, res) => {
+  const { draftId } = req.params;
 
   try {
     const verify = await axios.get(
-      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
+      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${draftId}`,
       {
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
           password: process.env.API_PASSWORD,
         },
-        headers: { "Content-Type": "application/json" },
       }
     );
 
     const result = verify.data.result?.toUpperCase() || "UNKNOWN";
-    console.log(`💬 Payment result for invoice ${orderId}: ${result}`);
+    console.log(`💬 Payment result for ${draftId}: ${result}`);
 
     if (result === "SUCCESS") {
       return res.send(`
         <script>
-          window.opener.postMessage("PAYMENT_SUCCESS_${orderId}", "*");
+          window.opener.postMessage("SUCCESS-${draftId}", "*");
           window.close();
         </script>
       `);
     } else {
       return res.send(`
         <script>
-          window.opener.postMessage("PAYMENT_FAIL_${orderId}", "*");
+          window.opener.postMessage("FAILURE-${draftId}", "*");
           window.close();
         </script>
       `);
     }
   } catch (err) {
     console.error("❌ Verification failed:", err.message);
-    return res.send(`
+    res.send(`
       <script>
-        window.opener.postMessage("PAYMENT_FAIL_${orderId}", "*");
+        window.opener.postMessage("FAILURE-${draftId}", "*");
         window.close();
       </script>
     `);
@@ -139,7 +131,6 @@ app.get("/payment-result/:orderId", async (req, res) => {
 /* ======================================================
    🚀 START SERVER
    ====================================================== */
-
 app.listen(port, "0.0.0.0", () => {
   console.log(`✅ Backend running on port ${port}`);
 });
