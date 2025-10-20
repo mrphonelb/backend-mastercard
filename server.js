@@ -5,30 +5,25 @@ const cors = require("cors");
 
 const app = express();
 
-/* ======================================================
-   🌐 CORS + HEALTH CHECK
-   ====================================================== */
-app.use(
-  cors({
-    origin: [
-      "https://www.mrphonelb.com",
-      "https://mrphone-backend.onrender.com",
-      "http://localhost:3000",
-    ],
-    methods: ["GET","POST","OPTIONS"],
-    allowedHeaders: ["Content-Type","Authorization","APIKEY"],
-  })
-);
+// CORS + JSON
+app.use(cors({
+  origin: [
+    "https://www.mrphonelb.com",
+    "https://mrphone-backend.onrender.com",
+    "http://localhost:3000"
+  ],
+  methods: ["GET","POST","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization","APIKEY"],
+}));
 app.options("*", cors());
 app.use(express.json());
 
-app.get("/", (req, res) => res.status(200).send("✅ MrPhone Backend Ready"));
+app.get("/", (req, res) => {
+  res.status(200).send("✅ MrPhone Backend Ready");
+});
 
 const port = process.env.PORT || 3000;
 
-/* ======================================================
-   💳 CREATE MASTERCA RD SESSION
-   ====================================================== */
 app.post("/initiate-checkout", async (req, res) => {
   const { draftId, amount, currency = "USD" } = req.body;
 
@@ -39,26 +34,27 @@ app.post("/initiate-checkout", async (req, res) => {
   try {
     console.log(`🧾 Creating Mastercard session for invoice ${draftId}...`);
 
-    const response = await axios.post(
-      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
-      {
-        apiOperation: "CREATE_CHECKOUT_SESSION",
-        interaction: {
-          operation: "PURCHASE",
-          returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
-          // Removed unsupported params (merchant.url, customerEmail etc.)
-          merchant: {
-            name: "Mr Phone Lebanon",
-            logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png"
-          }
-        },
-        order: {
-          id: draftId,
-          amount: amount,
-          currency: currency,
-          description: `Invoice #${draftId} – MrPhone Lebanon`
+    const payload = {
+      apiOperation: "CREATE_CHECKOUT_SESSION",
+      interaction: {
+        operation: "PURCHASE",
+        returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
+        merchant: {
+          name: "Mr Phone Lebanon",
+          logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png"
         }
       },
+      order: {
+        id: draftId,
+        amount: amount,
+        currency: currency
+        // note: no description field
+      }
+    };
+
+    const response = await axios.post(
+      `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
+      payload,
       {
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
@@ -80,9 +76,6 @@ app.post("/initiate-checkout", async (req, res) => {
   }
 });
 
-/* ======================================================
-   💰 VERIFY PAYMENT RESULT
-   ====================================================== */
 app.get("/payment-result/:draftId", async (req, res) => {
   const { draftId } = req.params;
 
@@ -126,9 +119,6 @@ app.get("/payment-result/:draftId", async (req, res) => {
   }
 });
 
-/* ======================================================
-   🚀 START SERVER
-   ====================================================== */
 app.listen(port, "0.0.0.0", () => {
   console.log(`✅ Backend running on port ${port}`);
 });
