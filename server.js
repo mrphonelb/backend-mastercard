@@ -14,7 +14,7 @@ const API_PASSWORD = process.env.API_PASSWORD;
 const PORT = process.env.PORT || 10000;
 
 /* ====================================================
-   💳 Create Mastercard Checkout Session (Updated)
+   💳 Create Mastercard Checkout Session (Final Fixed)
    ==================================================== */
 app.post("/create-mastercard-session", async (req, res) => {
   try {
@@ -26,7 +26,7 @@ app.post("/create-mastercard-session", async (req, res) => {
 
     console.log(`💰 Creating Mastercard session for ${amount} ${currency} | Order: ${orderId}`);
 
-    // ✅ Clean payload for Mastercard API (v67+ compliant)
+    // ✅ Mastercard payload (v67+)
     const payload = {
       apiOperation: "INITIATE_CHECKOUT",
       checkoutMode: "WEBSITE",
@@ -39,12 +39,9 @@ app.post("/create-mastercard-session", async (req, res) => {
         displayControl: {
           billingAddress: "HIDE",
           customerEmail: "HIDE",
-          shipping: "HIDE",
-          orderSummary: "SHOW",
-          paymentTerms: "HIDE"
+          shipping: "HIDE"
         },
-        returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
-        locale: "en_US"
+        returnUrl: "https://www.mrphonelb.com/client/contents/checkout"
       },
       order: {
         id: orderId,
@@ -54,7 +51,7 @@ app.post("/create-mastercard-session", async (req, res) => {
       }
     };
 
-    // ✅ POST to Mastercard Gateway
+    // ✅ POST request to Mastercard API
     const response = await axios.post(
       `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
       payload,
