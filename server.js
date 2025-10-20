@@ -21,7 +21,7 @@ app.use(
 );
 app.use(express.json());
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
 app.get("/", (_, res) => res.send("✅ MrPhone Backend Ready"));
 
@@ -31,7 +31,7 @@ app.get("/", (_, res) => res.send("✅ MrPhone Backend Ready"));
 app.post("/initiate-checkout", async (req, res) => {
   const { draftId, amount, currency = "USD", description, customer } = req.body;
 
-   try {
+  try {
     console.log(`🧾 Creating Mastercard session for draft ${draftId}...`);
 
     const body = {
@@ -41,7 +41,8 @@ app.post("/initiate-checkout", async (req, res) => {
         merchant: {
           name: "Mr. Phone Lebanon",
           url: "https://www.mrphonelb.com",
-          logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+          logo:
+            "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
         },
         locale: "en_US",
         returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${draftId}`,
@@ -55,7 +56,7 @@ app.post("/initiate-checkout", async (req, res) => {
         id: draftId,
         amount: parseFloat(amount).toFixed(2),
         currency: currency || "USD",
-        description: description || `Draft #${draftId} - Mr. Phone Lebanon`,
+        description: description || `Draft #${draftId} - MrPhone Lebanon`,
       },
       customer: {
         firstName: customer?.firstName || "Guest",
@@ -95,7 +96,7 @@ app.post("/initiate-checkout", async (req, res) => {
     }
     res.status(500).json({ error: "Failed to create Mastercard session" });
   }
-
+});
 
 /* ======================================================
    💰 PAYMENT RESULT HANDLER
@@ -119,35 +120,35 @@ app.get("/payment-result/:draftId", async (req, res) => {
     console.log(`💬 Payment result for ${draftId}: ${result}`);
 
     if (result === "SUCCESS") {
-      // ✅ Notify parent window (the checkout tab)
       return res.send(`
         <script>
-          window.opener.postMessage("SUCCESS", "*");
+          window.opener?.postMessage("SUCCESS", "*");
           window.close();
         </script>
       `);
     } else {
       return res.send(`
         <script>
-          window.opener.postMessage("FAILURE", "*");
+          window.opener?.postMessage("FAILURE", "*");
           window.close();
         </script>
       `);
     }
+
   } catch (err) {
     console.error("❌ Payment verification failed:", err.message);
     return res.send(`
       <script>
-        window.opener.postMessage("FAILURE", "*");
+        window.opener?.postMessage("FAILURE", "*");
         window.close();
       </script>
     `);
   }
 });
 
-/* ====================================================
+/* ======================================================
    🚀 START SERVER
-   ==================================================== */
+   ====================================================== */
 app.listen(port, () => {
   console.log(`✅ Backend running on http://localhost:${port}`);
 });
