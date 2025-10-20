@@ -6,40 +6,33 @@ const cors = require("cors");
 const app = express();
 
 /* ======================================================
-   🌐 CORS CONFIGURATION
+   🌐 CORS
    ====================================================== */
 app.use(
   cors({
     origin: [
       "https://www.mrphonelb.com",
       "https://mrphone-backend.onrender.com",
-      "http://localhost:3000"
+      "http://localhost:3000",
     ],
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "APIKEY"]
+    allowedHeaders: ["Content-Type", "Authorization", "APIKEY"],
   })
 );
 app.options("*", cors());
 app.use(express.json());
 
-const port = process.env.PORT || 10000;
+const port = process.env.PORT || 3000;
 
 /* ======================================================
-   ✅ HEALTH CHECK
-   ====================================================== */
-app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend Ready");
-});
-
-/* ======================================================
-   💳 INITIATE CHECKOUT (Create Mastercard session)
+   💳 INITIATE CHECKOUT — Create Mastercard Session
    ====================================================== */
 app.post("/initiate-checkout", async (req, res) => {
   const { draftId, amount, currency = "USD", description, customer } = req.body;
-  const orderId = draftId?.toString() || `ORDER-${Date.now()}`;
+  const orderId = draftId || `ORDER-${Date.now()}`;
 
   try {
-    console.log(`🧾 Creating Mastercard session for Daftra invoice ${orderId}...`);
+    console.log(`🧾 Creating Mastercard session for invoice ${orderId}...`);
 
     const response = await axios.post(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
@@ -51,35 +44,35 @@ app.post("/initiate-checkout", async (req, res) => {
             name: "Mr. Phone Lebanon",
             url: "https://www.mrphonelb.com",
             logo:
-              "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png"
+              "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           },
           locale: "en_US",
           returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
           displayControl: {
             billingAddress: "HIDE",
             shipping: "HIDE",
-            customerEmail: "HIDE"
-          }
+            customerEmail: "HIDE",
+          },
         },
         order: {
-          id: orderId, // ✅ SAME AS DAFTRA INVOICE
+          id: orderId,
           amount,
           currency,
-          description: description || `Daftra Invoice #${orderId} - Mr. Phone Lebanon`
+          description: description || `Invoice #${orderId} - MrPhone Lebanon`,
         },
         customer: {
           firstName: customer?.firstName || "Guest",
           lastName: customer?.lastName || "Customer",
           email: customer?.email || "guest@mrphonelb.com",
-          mobilePhone: customer?.phone || "00000000"
-        }
+          mobilePhone: customer?.phone || "00000000",
+        },
       },
       {
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
-          password: process.env.API_PASSWORD
+          password: process.env.API_PASSWORD,
         },
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json" },
       }
     );
 
@@ -90,36 +83,28 @@ app.post("/initiate-checkout", async (req, res) => {
     console.error("❌ INITIATE_CHECKOUT failed:", error.response?.data || error.message);
     res.status(500).json({
       error: "Failed to create Mastercard session",
-      details: error.response?.data || error.message
+      details: error.response?.data || error.message,
     });
   }
 });
 
 /* ======================================================
-   💳 REDIRECT TO MASTERCARD PAGE (new tab)
-   ====================================================== */
-app.get("/checkout/pay/:sessionId", (req, res) => {
-  const { sessionId } = req.params;
-  const payUrl = `${process.env.HOST}checkout/pay/${sessionId}`;
-  res.redirect(payUrl);
-});
-
-/* ======================================================
-   💰 HANDLE PAYMENT RESULT
+   💰 PAYMENT RESULT HANDLER
    ====================================================== */
 app.get("/payment-result/:orderId", async (req, res) => {
   const { orderId } = req.params;
 
   try {
-    console.log(`🔍 Verifying payment for invoice ${orderId}...`);
+    console.log(`🔍 Verifying payment for order ${orderId}...`);
+
     const verify = await axios.get(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
       {
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
-          password: process.env.API_PASSWORD
+          password: process.env.API_PASSWORD,
         },
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json" },
       }
     );
 
@@ -127,16 +112,17 @@ app.get("/payment-result/:orderId", async (req, res) => {
     console.log(`💬 Payment result for ${orderId}: ${result}`);
 
     if (result === "SUCCESS") {
+      // Notify Daftra window
       return res.send(`
         <script>
-          window.opener.postMessage("SUCCESS-${orderId}", "*");
+          window.opener.postMessage("PAYMENT_SUCCESS_${orderId}", "*");
           window.close();
         </script>
       `);
     } else {
       return res.send(`
         <script>
-          window.opener.postMessage("FAILURE-${orderId}", "*");
+          window.opener.postMessage("PAYMENT_FAIL_${orderId}", "*");
           window.close();
         </script>
       `);
@@ -145,7 +131,7 @@ app.get("/payment-result/:orderId", async (req, res) => {
     console.error("❌ Verification failed:", err.message);
     return res.send(`
       <script>
-        window.opener.postMessage("FAILURE-${orderId}", "*");
+        window.opener.postMessage("PAYMENT_FAIL_${orderId}", "*");
         window.close();
       </script>
     `);
