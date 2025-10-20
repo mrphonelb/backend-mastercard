@@ -4,70 +4,72 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-app.use(cors({ origin: "*", methods: ["GET","POST","OPTIONS"] }));
+app.use(cors({ origin: "*", methods: ["GET","POST","OPTIONS"], allowedHeaders: ["Content-Type","Authorization"] }));
 app.use(express.json());
 
-// (optional) cleaner logs
-app.use((req, res, next) => {
-  if (req.url === "/" && req.method === "GET") return next();
-  const origin = req.headers.origin || "undefined";
-  console.log(`➡️  ${req.method} ${req.url} | From Origin: ${origin}`);
-  next();
-});
-
-const PORT = process.env.PORT || 10000;
-const MERCHANT_ID = process.env.MERCHANT_ID;
+const PORT = process.env.PORT || 3000;
+const MERCHANT_ID = process.env.MERCHANT_ID || "TEST06263500";
 const API_PASSWORD = process.env.API_PASSWORD;
-const API_URL = process.env.API_URL; // .../api/rest/version/72
+const API_URL = process.env.HOST || "https://creditlibanais-netcommerce.gateway.mastercard.com/api/rest/version/72";
 
-app.get("/", (_, res) => res.send("✅ MrPhone Backend OK"));
+app.get("/", (_, res) => res.send("✅ MrPhone Backend is running!"));
 
 app.post("/initiate-checkout", async (req, res) => {
   try {
     const { amount, currency, draftId, description, customer } = req.body;
+    console.log(`💰 Creating session for ${amount} ${currency} | Draft: ${draftId}`);
 
     const payload = {
-      apiOperation: "INITIATE_CHECKOUT",
+      apiOperation: "CREATE_CHECKOUT_SESSION",
       interaction: {
         operation: "PURCHASE",
         returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
         merchant: {
           name: "Mr. Phone LB",
-          logo: "https://www.mrphonelb.com/images/logo.png"
-        }
+          logo: "https://www.mrphonelb.com/images/logo.png",
+        },
       },
       order: {
         id: `ORDER-${draftId}`,
-        amount: Number(amount).toFixed(2),
+        amount: parseFloat(amount).toFixed(2),
         currency: currency || "USD",
-        description: description || `MrPhone order ${draftId}`
+        description: description || `MrPhone order ${draftId}`,
       },
       customer: {
         firstName: customer?.firstName || "Guest",
-        lastName:  customer?.lastName  || "Customer",
-        email:     customer?.email     || "guest@mrphonelb.com",
-        mobilePhone: customer?.phone   || "0000"
-      }
+        lastName: customer?.lastName || "Customer",
+        email: customer?.email || "guest@mrphonelb.com",
+        mobilePhone: customer?.phone || "0000",
+      },
     };
 
-    const mp = await axios.post(
+    const response = await axios.post(
       `${API_URL}/merchant/${MERCHANT_ID}/session`,
       payload,
       {
-        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
-        headers: { "Content-Type": "application/json" }
+        auth: {
+          username: `merchant.${MERCHANT_ID}`,
+          password: API_PASSWORD,
+        },
+        headers: { "Content-Type": "application/json" },
       }
     );
 
-    const { session } = mp.data || {};
+    const session = response.data.session;
     if (!session?.id) {
-      return res.status(502).json({ error: "No session id from gateway", debug: mp.data });
+      console.error("❌ No session ID:", response.data);
+      return res.status(502).json({ error: "No sessionId", debug: response.data });
     }
+
+    console.log("✅ Session created:", session.id);
     res.json({ sessionId: session.id, successIndicator: session.successIndicator });
-  } catch (e) {
-    console.error("❌ MPGS error:", e.response?.data || e.message);
-    res.status(500).json({ error: "Failed to create session", debug: e.response?.data || e.message });
+  } catch (err) {
+    console.error("❌ MPGS error:", err.response?.data || err.message);
+    res.status(500).json({
+      error: "Failed to create session",
+      debug: err.response?.data || err.message,
+    });
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 MrPhone Backend on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 MrPhone Backend running on port ${PORT}`));
