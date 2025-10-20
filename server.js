@@ -6,17 +6,17 @@ const cors = require("cors");
 const app = express();
 
 /* ======================================================
-   🌐 CORS
+   🌐 CORS CONFIGURATION
    ====================================================== */
 app.use(
   cors({
     origin: [
       "https://www.mrphonelb.com",
       "https://mrphone-backend.onrender.com",
-      "http://localhost:3000",
+      "http://localhost:3000"
     ],
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "APIKEY"],
+    allowedHeaders: ["Content-Type", "Authorization", "APIKEY"]
   })
 );
 app.options("*", cors());
@@ -25,7 +25,14 @@ app.use(express.json());
 const port = process.env.PORT || 10000;
 
 /* ======================================================
-   💳 INITIATE CHECKOUT — USE SAME DAFTRA INVOICE ID
+   ✅ HEALTH CHECK
+   ====================================================== */
+app.get("/", (req, res) => {
+  res.send("✅ MrPhone Backend Ready");
+});
+
+/* ======================================================
+   💳 INITIATE CHECKOUT (Create Mastercard session)
    ====================================================== */
 app.post("/initiate-checkout", async (req, res) => {
   const { draftId, amount, currency = "USD", description, customer } = req.body;
@@ -44,52 +51,52 @@ app.post("/initiate-checkout", async (req, res) => {
             name: "Mr. Phone Lebanon",
             url: "https://www.mrphonelb.com",
             logo:
-              "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+              "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png"
           },
           locale: "en_US",
           returnUrl: `${process.env.PUBLIC_BASE_URL}/payment-result/${orderId}`,
           displayControl: {
             billingAddress: "HIDE",
             shipping: "HIDE",
-            customerEmail: "HIDE",
-          },
+            customerEmail: "HIDE"
+          }
         },
         order: {
           id: orderId, // ✅ SAME AS DAFTRA INVOICE
           amount,
           currency,
-          description: description || `Daftra Invoice #${orderId} - Mr. Phone Lebanon`,
+          description: description || `Daftra Invoice #${orderId} - Mr. Phone Lebanon`
         },
         customer: {
           firstName: customer?.firstName || "Guest",
           lastName: customer?.lastName || "Customer",
           email: customer?.email || "guest@mrphonelb.com",
-          mobilePhone: customer?.phone || "00000000",
-        },
+          mobilePhone: customer?.phone || "00000000"
+        }
       },
       {
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
-          password: process.env.API_PASSWORD,
+          password: process.env.API_PASSWORD
         },
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" }
       }
     );
 
     const sessionId = response.data.session.id;
-    console.log(`✅ Mastercard session created for invoice ${orderId}: ${sessionId}`);
+    console.log(`✅ Mastercard session created: ${sessionId}`);
     res.json({ sessionId, orderId });
   } catch (error) {
     console.error("❌ INITIATE_CHECKOUT failed:", error.response?.data || error.message);
     res.status(500).json({
       error: "Failed to create Mastercard session",
-      details: error.response?.data || error.message,
+      details: error.response?.data || error.message
     });
   }
 });
 
 /* ======================================================
-   💳 REDIRECT TO PAYMENT PAGE (popup)
+   💳 REDIRECT TO MASTERCARD PAGE (new tab)
    ====================================================== */
 app.get("/checkout/pay/:sessionId", (req, res) => {
   const { sessionId } = req.params;
@@ -98,22 +105,21 @@ app.get("/checkout/pay/:sessionId", (req, res) => {
 });
 
 /* ======================================================
-   💰 PAYMENT RESULT HANDLER — POSTS SUCCESS/FAIL
+   💰 HANDLE PAYMENT RESULT
    ====================================================== */
 app.get("/payment-result/:orderId", async (req, res) => {
   const { orderId } = req.params;
 
   try {
-    console.log(`🔍 Verifying payment for Daftra invoice ${orderId}...`);
-
+    console.log(`🔍 Verifying payment for invoice ${orderId}...`);
     const verify = await axios.get(
       `${process.env.HOST}api/rest/version/100/merchant/${process.env.MERCHANT_ID}/order/${orderId}`,
       {
         auth: {
           username: `merchant.${process.env.MERCHANT_ID}`,
-          password: process.env.API_PASSWORD,
+          password: process.env.API_PASSWORD
         },
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" }
       }
     );
 
@@ -149,12 +155,6 @@ app.get("/payment-result/:orderId", async (req, res) => {
 /* ======================================================
    🚀 START SERVER
    ====================================================== */
-
-   app.get("/", (req, res) => {
-  res.status(200).send("✅ MrPhone Backend Ready");
-});
-
-
 app.listen(port, () => {
   console.log(`✅ Backend running on http://localhost:${port}`);
 });
