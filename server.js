@@ -16,11 +16,11 @@ app.get("/", (_, res) => res.send("✅ MrPhone Backend is running!"));
 
 app.post("/initiate-checkout", async (req, res) => {
   try {
-    const { amount, currency, draftId, description, customer } = req.body;
+    const { amount, currency, draftId, description } = req.body;
     console.log(`💰 Creating session for ${amount} ${currency} | Draft: ${draftId}`);
 
     const payload = {
-      apiOperation: "INITIATE_CHECKOUT",
+      apiOperation: "CREATE_CHECKOUT_SESSION",
       interaction: {
         operation: "PURCHASE",
         returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
@@ -35,22 +35,13 @@ app.post("/initiate-checkout", async (req, res) => {
         currency: currency || "USD",
         description: description || `MrPhone order ${draftId}`,
       },
-      customer: {
-        firstName: customer?.firstName || "Guest",
-        lastName: customer?.lastName || "Customer",
-        email: customer?.email || "guest@mrphonelb.com",
-        mobilePhone: customer?.phone || "0000",
-      },
     };
 
     const response = await axios.post(
       `${API_URL}/merchant/${MERCHANT_ID}/session`,
       payload,
       {
-        auth: {
-          username: `merchant.${MERCHANT_ID}`,
-          password: API_PASSWORD,
-        },
+        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
         headers: { "Content-Type": "application/json" },
       }
     );
@@ -71,5 +62,6 @@ app.post("/initiate-checkout", async (req, res) => {
     });
   }
 });
+
 
 app.listen(PORT, () => console.log(`🚀 MrPhone Backend running on port ${PORT}`));
