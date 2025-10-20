@@ -25,7 +25,7 @@ app.post("/initiate-checkout", async (req, res) => {
     const body = {
       apiOperation: "INITIATE_CHECKOUT",
       interaction: {
-        operation: "PAY",
+        operation: "PURCHASE",
         merchant: { name: "Mr Phone LB" },
         returnUrl: "https://www.mrphonelb.com/client/contents/checkout?paid=1"
       },
