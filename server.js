@@ -29,15 +29,21 @@ app.post("/create-mastercard-session", async (req, res) => {
     const response = await axios.post(
       `${process.env.HOST}/api/rest/version/100/merchant/${process.env.MERCHANT_ID}/session`,
       {
-        apiOperation: "INITIATE_CHECKOUT",
+        apiOperation: "INITIATE_CHECKOUT",  // ✅ correct operation
         interaction: {
-          operation: "PURCHASE",   // ✅ REQUIRED
-          returnUrl: "https://www.mrphonelb.com/client/contents/checkout"
+          operation: "PURCHASE",            // ✅ must be PURCHASE (not AUTHORIZE / NONE)
+          returnUrl: "https://www.mrphonelb.com/client/contents/checkout", // ✅ redirect after success
+          merchant: {
+            name: "Mr Phone LB"             // ✅ merchant name only (no logo)
+          },
+          displayControl: {
+            billingAddress: "HIDE"          // ✅ optional - hides billing address
+          }
         },
         order: {
-          id: orderId,
+          id: orderId,                      // ✅ example: ORDER-1760978074268
           amount: amount,
-          currency: currency
+          currency: currency || "USD"       // ✅ ensure USD
         }
       },
       {
@@ -53,9 +59,13 @@ app.post("/create-mastercard-session", async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error("❌ Mastercard Error:", error.response?.data || error.message);
-    res.status(400).json({ error: "Failed to create Mastercard session", debug: error.response?.data });
+    res.status(400).json({
+      error: "Failed to create Mastercard session",
+      debug: error.response?.data
+    });
   }
 });
+
 
 
 app.listen(PORT, () => {
