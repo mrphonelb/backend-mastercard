@@ -7,28 +7,29 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Env vars
 const HOST = process.env.HOST;
 const MERCHANT_ID = process.env.MERCHANT_ID;
 const API_PASSWORD = process.env.API_PASSWORD;
 const PORT = process.env.PORT || 10000;
 
 /* ======================================================
-   💳 CREATE MASTERCARD SESSION — FINAL FIXED VERSION
+   💳 FINAL FIXED BACKEND — Mastercard Hosted Checkout v100
    ====================================================== */
 app.post("/create-mastercard-session", async (req, res) => {
   try {
     const { orderId, amount, currency } = req.body;
+
     if (!orderId || !amount || !currency) {
       return res.status(400).json({ error: "Missing orderId, amount, or currency." });
     }
 
     console.log(`💰 Creating Mastercard session for ${amount} ${currency} | Order: ${orderId}`);
 
+    // ✅ VALID Mastercard payload
     const payload = {
       apiOperation: "INITIATE_CHECKOUT",
       interaction: {
-        operation: "PURCHASE", // ✅ Required for one-step sale
+        operation: "PURCHASE",
         merchant: {
           name: "Mr Phone Lebanon",
           url: "https://www.mrphonelb.com"
@@ -37,8 +38,7 @@ app.post("/create-mastercard-session", async (req, res) => {
           billingAddress: "HIDE",
           customerEmail: "HIDE",
           shipping: "HIDE"
-        },
-        // ⚠️ Do NOT include returnUrl or checkoutMode here!
+        }
       },
       order: {
         id: orderId,
@@ -60,8 +60,13 @@ app.post("/create-mastercard-session", async (req, res) => {
       }
     );
 
+    // ✅ Return only the safe fields
     console.log("✅ Mastercard Session Created:", response.data);
-    res.json(response.data);
+    res.json({
+      result: response.data.result,
+      session: response.data.session,
+      successIndicator: response.data.successIndicator
+    });
   } catch (err) {
     console.error("❌ Mastercard Session Error:", err.response?.data || err.message);
     res.status(500).json({
@@ -72,14 +77,14 @@ app.post("/create-mastercard-session", async (req, res) => {
 });
 
 /* ======================================================
-   🧠 HEALTH CHECK
+   🧠 Health Check
    ====================================================== */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend ready for Mastercard Popup Checkout (v100).");
+  res.send("✅ MrPhone Backend running — Mastercard Hosted Checkout (v100 Final).");
 });
 
 /* ======================================================
-   🚀 START SERVER
+   🚀 Start Server
    ====================================================== */
 app.listen(PORT, () => {
   console.log(`✅ MrPhone backend running on port ${PORT}`);
