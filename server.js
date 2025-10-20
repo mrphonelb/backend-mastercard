@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ ENV variables
+// ✅ Environment variables
 const HOST = process.env.HOST;
 const MERCHANT_ID = process.env.MERCHANT_ID;
 const API_PASSWORD = process.env.API_PASSWORD;
@@ -36,8 +36,7 @@ app.post("/create-mastercard-session", async (req, res) => {
         displayControl: {
           billingAddress: "HIDE",
           customerEmail: "MANDATORY"
-        },
-        logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png"
+        }
       },
       order: {
         id: orderId,
