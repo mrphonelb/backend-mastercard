@@ -21,7 +21,7 @@ app.use(
 );
 app.use(express.json());
 
-const port = process.env.PORT || 10000;
+const port = process.env.PORT || 3000;
 
 app.get("/", (_, res) => res.send("✅ MrPhone Backend Ready"));
 
