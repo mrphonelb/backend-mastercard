@@ -24,7 +24,7 @@ app.post("/create-mastercard-session", async (req, res) => {
 
    const payload = {
   apiOperation: "INITIATE_CHECKOUT",
-  checkoutMode: "IFRAME",  // 👈 change from WEBSITE to IFRAME
+  checkoutMode: "WEBSITE",
   interaction: {
     operation: "PURCHASE",
     merchant: {
@@ -45,6 +45,7 @@ app.post("/create-mastercard-session", async (req, res) => {
     description: "Mr Phone Lebanon Online Purchase"
   }
 };
+
 
 
     const response = await axios.post(
