@@ -76,7 +76,10 @@ app.post("/initiate-checkout", async (req, res) => {
 
     res.json({ sessionId });
   } catch (err) {
-    console.error("❌ INITIATE_CHECKOUT failed:", err.response?.data || err.message);
+    console.error(
+      "❌ INITIATE_CHECKOUT failed:",
+      err.response?.data || err.message
+    );
     res.status(500).json({ error: "Failed to create Mastercard session" });
   }
 });
@@ -103,22 +106,31 @@ app.get("/payment-result/:draftId", async (req, res) => {
     console.log(`💬 Payment result for ${draftId}: ${result}`);
 
     if (result === "SUCCESS") {
-  // ✅ Notify parent window (the checkout tab)
-  return res.send(`
-    <script>
-      window.opener.postMessage("SUCCESS", "*");
-      window.close();
-    </script>
-  `);
-} else {
-  return res.send(`
-    <script>
-      window.opener.postMessage("FAILURE", "*");
-      window.close();
-    </script>
-  `);
-}
-
+      // ✅ Notify parent window (the checkout tab)
+      return res.send(`
+        <script>
+          window.opener.postMessage("SUCCESS", "*");
+          window.close();
+        </script>
+      `);
+    } else {
+      return res.send(`
+        <script>
+          window.opener.postMessage("FAILURE", "*");
+          window.close();
+        </script>
+      `);
+    }
+  } catch (err) {
+    console.error("❌ Payment verification failed:", err.message);
+    return res.send(`
+      <script>
+        window.opener.postMessage("FAILURE", "*");
+        window.close();
+      </script>
+    `);
+  }
+});
 
 /* ====================================================
    🚀 START SERVER
