@@ -49,7 +49,7 @@ app.post("/create-mastercard-session", async (req, res) => {
           logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
           url: "https://www.mrphonelb.com"
         },
-        returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?orderId=${orderId}&sessionId={session.id}`,
+        returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?orderId=${orderId}`,
         redirectMerchantUrl: "https://www.mrphonelb.com/client/contents/error?invoice_id=unknown",
         retryAttemptCount: 2,
         displayControl: { billingAddress: "HIDE", customerEmail: "HIDE" }
