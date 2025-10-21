@@ -34,31 +34,35 @@ app.post("/create-mastercard-session", async (req, res) => {
     const checkoutTotal = Number(total); // ← EXACT checkout total (no +3.5 here)
     console.log(`💳 Starting MPGS session | client:${client_id} | total:$${checkoutTotal}`);
 
-    const payload = {
-      apiOperation: "INITIATE_CHECKOUT",
-      checkoutMode: "WEBSITE",
-      order: {
-        id: `TEMP-${Date.now()}-${client_id}`, // temporary label; draft will be created only after success
-        amount: checkoutTotal,
-        currency,
-        description: "Mr Phone LB Online Checkout",
-      },
-      interaction: {
-        operation: "PURCHASE",
-        merchant: {
-          name: "Mr Phone Lebanon",
-          logo:
-            "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
-          url: "https://www.mrphonelb.com",
-        },
-        // MPGS will append ?sessionId=... to this URL
-        returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}`,
-        redirectMerchantUrl:
-          "https://www.mrphonelb.com/client/contents/error?invoice_id=unknown",
-        retryAttemptCount: 2,
-        displayControl: { billingAddress: "HIDE", customerEmail: "HIDE" },
-      },
-    };
+    // In create-mastercard-session
+const orderId = `ORDER-${Date.now()}-${client_id}`;
+const payload = {
+  apiOperation: "INITIATE_CHECKOUT",
+  checkoutMode: "WEBSITE",
+  order: {
+    id: orderId, // ✅ show this in the payment gateway
+    amount: checkoutTotal,
+    currency,
+    description: `Mr Phone LB - ${orderId}`
+  },
+  interaction: {
+    operation: "PURCHASE",
+    merchant: {
+      name: "Mr Phone Lebanon",
+      logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+      url: "https://www.mrphonelb.com"
+    },
+    returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?orderId=${orderId}`,
+    redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=unknown`,
+    retryAttemptCount: 2,
+    displayControl: { billingAddress: "HIDE", customerEmail: "HIDE" }
+  }
+};
+
+// Save in TEMP_STORE by both IDs
+TEMP_STORE[data.session.id] = { client_id, items, total: checkoutTotal, currency };
+TEMP_STORE[orderId] = TEMP_STORE[data.session.id];
+
 
     const resp = await axios.post(
       `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
@@ -97,19 +101,21 @@ app.post("/create-mastercard-session", async (req, res) => {
    - Payment = SAME amount as draft, status = 0 (pending)
 ============================================================ */
 app.get("/verify-payment/:clientId", async (req, res) => {
-  try {
-    const { clientId } = req.params;
-    const sessionId = req.query.sessionId; // MPGS appends this automatically
+  const { clientId } = req.params;
+  const sessionId = req.query.sessionId;
+  const orderId = req.query.orderId;
 
-    if (!sessionId || !TEMP_STORE[sessionId]) {
-      console.warn("⚠️ Missing stored cart for session:", sessionId);
-      return res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
-    }
+  const key = sessionId || orderId; // ✅ use whichever is available
+  if (!key || !TEMP_STORE[key]) {
+    console.warn("⚠️ Missing stored cart for:", key);
+    return res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
+  }
 
-    const { client_id, items, total, currency } = TEMP_STORE[sessionId];
-    delete TEMP_STORE[sessionId]; // cleanup
+  const { client_id, items, total, currency } = TEMP_STORE[key];
+  delete TEMP_STORE[key];
+  ...
+});
 
-    console.log(`🔍 Verifying MPGS session ${sessionId} for client ${client_id}`);
 
     // Get session status/result
     const verify = await axios.get(
