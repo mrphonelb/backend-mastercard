@@ -237,11 +237,16 @@ app.post("/create-draft", async (req, res) => {
 
 
 /* ====================================================
-   💰 CREATE PAYMENT FOR DAFTRA DRAFT (Manual Test)
+   💰 CREATE PAYMENT FOR DAFTRA INVOICE (FINAL VERSION)
    ==================================================== */
 app.post("/create-payment", async (req, res) => {
   try {
-    const { invoice_id, amount, method = "Credit/Debit Card (Mastercard)" } = req.body;
+    const {
+      invoice_id,
+      amount,
+      payment_method = "Credit/Debit Card (Mastercard)",
+      notes = "Online payment via Mastercard (3.5% customer fee not recorded in Daftra)"
+    } = req.body;
 
     if (!invoice_id || !amount) {
       return res.status(400).json({ error: "Missing invoice_id or amount" });
@@ -250,14 +255,15 @@ app.post("/create-payment", async (req, res) => {
     const payload = {
       InvoicePayment: {
         invoice_id,
+        payment_method,
         amount: Number(amount),
-        method,
-        notes: "💳 Manual payment added via backend (for testing)"
+        notes,
+        processed: true
       }
     };
 
     const response = await axios.post(
-      "https://www.mrphonelb.com/api2/invoices/payments",
+      "https://www.mrphonelb.com/api2/invoice_payments",
       payload,
       {
         headers: {
@@ -268,7 +274,7 @@ app.post("/create-payment", async (req, res) => {
       }
     );
 
-    console.log("✅ Payment created:", response.data);
+    console.log("✅ Payment created successfully:", response.data);
     return res.json(response.data);
   } catch (err) {
     console.error("❌ Payment creation error:", err.response?.data || err.message);
@@ -278,7 +284,6 @@ app.post("/create-payment", async (req, res) => {
     });
   }
 });
-
 
 /* ====================================================
    🧠 3) Health
