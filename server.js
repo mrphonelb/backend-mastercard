@@ -172,6 +172,24 @@ app.post("/payment-success", async (req, res) => {
   }
 });
 
+
+/* test daftra token */
+
+app.get("/check-token", async (req, res) => {
+  try {
+    const test = await axios.get("https://www.mrphonelb.com/api2/clients", {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${process.env.DAFTRA_TOKEN}`
+      }
+    });
+    res.json({ ok: true, data: test.data });
+  } catch (err) {
+    res.json({ ok: false, debug: err.response?.data || err.message });
+  }
+});
+
+
 /* ====================================================
    🧠 Health Check
    ==================================================== */
