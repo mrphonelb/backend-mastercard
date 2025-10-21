@@ -5,55 +5,45 @@ const cors = require("cors");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // 🔥 required before routes
 
-// 🔐 Environment variables
-const HOST = process.env.HOST;
+// 🔐 ENV variables
+const HOST = process.env.HOST; // e.g. https://creditlibanais-netcommerce.gateway.mastercard.com
 const MERCHANT_ID = process.env.MERCHANT_ID;
 const API_PASSWORD = process.env.API_PASSWORD;
 const PORT = process.env.PORT || 10000;
 
-// 🔐 Daftra API Key
+// 🔐 Daftra key
 const DAFTRA_API_KEY = "dd904f6a2745e5206ea595caac587a850e990504";
 
-// 🧠 TEMP STORE (holds session → cart)
+// 🧠 temp in-memory store
 const TEMP_STORE = {};
 
 /* ============================================================
-   💳 STEP 1: Create MPGS session (no draft yet)
+   1️⃣  CREATE MPGS SESSION — no draft yet
 ============================================================ */
 app.post("/create-mastercard-session", async (req, res) => {
   try {
-    const { client_id, invoice_id, total, currency = "USD" } = req.body;
+    console.log("📦 Incoming body:", req.body);
 
-    if (!client_id || !invoice_id || !total) {
+    const { client_id, invoice_id, total, currency = "USD", items = [] } = req.body;
+    if (!client_id || !invoice_id || !total)
       return res.status(400).json({ error: "Missing client_id, invoice_id, or total" });
-    }
 
-    console.log(`💳 Starting MPGS session | invoice:${invoice_id} | total:$${total}`);
+    const amount = Number(total);
+    console.log(`💳 Starting MPGS session | invoice:${invoice_id} | total:$${amount}`);
 
-    // STEP 1 — Create session (no returnUrl yet)
-    const initResp = await axios.post(
-      `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
-      { apiOperation: "CREATE_CHECKOUT_SESSION" },
-      {
-        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-
-    const sessionId = initResp.data?.session?.id;
-    if (!sessionId) throw new Error("Failed to get MPGS session.id");
-
-    // STEP 2 — Update session with order + return URL
     const orderId = `ORDER-${invoice_id}-${Date.now()}`;
+
+    // ✅ valid MPGS payload (no merchant.url, no redirectMerchantUrl)
     const payload = {
-      apiOperation: "UPDATE_SESSION",
+      apiOperation: "INITIATE_CHECKOUT",
+      checkoutMode: "WEBSITE",
       order: {
         id: orderId,
-        amount: Number(total),
+        amount,
         currency,
-        description: `Mr Phone LB - Invoice ${invoice_id}`,
+        description: `Mr Phone LB — Invoice #${invoice_id}`,
       },
       interaction: {
         operation: "PURCHASE",
@@ -61,17 +51,14 @@ app.post("/create-mastercard-session", async (req, res) => {
           name: "Mr Phone Lebanon",
           logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
         },
-        returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}&sessionId=${sessionId}`,
+        returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}&orderId=${orderId}`,
         retryAttemptCount: 2,
-        displayControl: {
-          billingAddress: "HIDE",
-          customerEmail: "HIDE",
-        },
+        displayControl: { billingAddress: "HIDE", customerEmail: "HIDE" },
       },
     };
 
-    await axios.put(
-      `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session/${sessionId}`,
+    const resp = await axios.post(
+      `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
       payload,
       {
         auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
@@ -79,12 +66,14 @@ app.post("/create-mastercard-session", async (req, res) => {
       }
     );
 
-    // Store in memory for later verification
-    TEMP_STORE[sessionId] = { client_id, invoice_id, total, currency };
-    TEMP_STORE[invoice_id] = TEMP_STORE[sessionId];
+    const data = resp.data;
+    if (!data?.session?.id) throw new Error("Missing MPGS session.id");
 
-    console.log("✅ MPGS session created:", sessionId);
-    res.json({ ok: true, session: { id: sessionId } });
+    // store invoice + cart temporarily
+    TEMP_STORE[data.session.id] = { client_id, invoice_id, total: amount, currency, items, orderId };
+
+    console.log("✅ MPGS session created:", data.session.id);
+    res.json({ ok: true, session: data.session, successIndicator: data.successIndicator });
   } catch (err) {
     console.error("❌ Session creation error:", err.response?.data || err.message);
     res.status(500).json({
@@ -94,132 +83,120 @@ app.post("/create-mastercard-session", async (req, res) => {
   }
 });
 
-
 /* ============================================================
-   💳 STEP 2: Verify payment → Create draft + pending payment
+   2️⃣  VERIFY PAYMENT — then create Daftra DRAFT + pending PAYMENT
 ============================================================ */
 app.get("/verify-payment/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
-    const sessionIdFromQuery = req.query.sessionId;
-const invoice_id = req.query.invoice_id;
+    const { sessionId, invoice_id, orderId } = req.query;
+    const key = sessionId || orderId;
 
-// ✅ Lookup stored data
-const stored =
-  (sessionIdFromQuery && TEMP_STORE[sessionIdFromQuery]) ||
-  (invoice_id && TEMP_STORE[invoice_id]);
-
-if (!stored) {
-  console.warn("⚠️ Missing stored session/cart for:", sessionIdFromQuery || invoice_id);
-  return res.redirect(`https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`);
-}
-
-// ✅ Extract real sessionId from stored object
-const { client_id, items, currency, sessionId } = stored;
-const actualSessionId = sessionId || sessionIdFromQuery;
-
-delete TEMP_STORE[actualSessionId];
-delete TEMP_STORE[invoice_id];
-
-console.log(`🔍 Verifying MPGS session ${actualSessionId} for invoice ${invoice_id}`);
-
-
-    // Get session status
-  const verify = await axios.get(
-  `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session/${actualSessionId}`,
-  {
-    auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
-    headers: { "Content-Type": "application/json" },
-  }
-);
-
-
-    const v = verify.data;
-    const result = v.result || v.status;
-    const status = v.order?.status || v.status;
-    const txnId = v.transaction?.id || sessionId;
-
-    const success =
-      String(result).toUpperCase() === "SUCCESS" &&
-      ["CAPTURED", "AUTHORIZED", "SUCCESS"].includes(String(status).toUpperCase());
-
-    if (!success) {
-      console.warn("⚠️ Payment not successful:", { result, status });
-      return res.redirect(`https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`);
+    if (!key || !TEMP_STORE[key]) {
+      console.warn("⚠️ Missing stored session/cart for:", key);
+      return res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
     }
 
-    console.log("✅ Payment confirmed, creating Daftra draft...");
+    const { client_id, items, total, currency } = TEMP_STORE[key];
+    delete TEMP_STORE[key];
 
-    // Create draft (exact items)
-    const draftRes = await axios.post(
-      "https://www.mrphonelb.com/api2/invoices",
+    console.log(`🔍 Verifying MPGS session ${key} for invoice ${invoice_id}`);
+
+    const verifyResp = await axios.get(
+      `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session/${sessionId}`,
       {
-        Invoice: {
-          client_id,
-          draft: true,
-          is_offline: true,
-          currency_code: currency,
-          notes: `✅ MPGS success Txn:${txnId} | Awaiting manual stock/IMEI confirmation.`,
-        },
-        InvoiceItem: items.map((i) => ({
-          item: i.item,
-          description: i.description || "",
-          unit_price: Number(i.unit_price),
-          quantity: Number(i.quantity),
-        })),
-      },
-      {
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          apikey: DAFTRA_API_KEY,
-        },
+        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
+        headers: { "Content-Type": "application/json" },
       }
     );
+
+    const v = verifyResp.data || {};
+    const result = v.result || "UNKNOWN";
+    const status = v.order?.status || v.status || "UNKNOWN";
+    const txnId =
+      v.transaction?.id || v.order?.id || v.session?.id || sessionId || "UNKNOWN_TXN";
+
+    console.log("ℹ️ MPGS verify:", { result, status, txnId });
+
+    const success =
+      result.toUpperCase() === "SUCCESS" &&
+      ["CAPTURED", "AUTHORIZED", "SUCCESS"].includes(status.toUpperCase());
+
+    if (!success) {
+      console.warn("⚠️ Payment failed or canceled");
+      return res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=" + invoice_id);
+    }
+
+    console.log("✅ Payment success, creating Daftra DRAFT + pending payment...");
+
+    // ✅ Create Daftra draft invoice
+    const draftPayload = {
+      Invoice: {
+        client_id,
+        draft: true,
+        is_offline: true,
+        currency_code: currency,
+        notes: `✅ Mastercard transaction ${txnId} — draft created after successful payment.`,
+      },
+      InvoiceItem: items.map((i) => ({
+        item: i.item,
+        description: i.description || "",
+        unit_price: Number(i.unit_price),
+        quantity: Number(i.quantity),
+      })),
+    };
+
+    const draftRes = await axios.post("https://www.mrphonelb.com/api2/invoices", draftPayload, {
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        apikey: DAFTRA_API_KEY,
+      },
+    });
 
     const draft = draftRes.data;
     if (!draft?.id) throw new Error("Failed to create Daftra draft");
 
-    console.log("🧾 Draft created:", draft.id);
-
-    // Create pending payment
-    const totalWithoutFee = items.reduce(
+    const draftTotal = items.reduce(
       (sum, i) => sum + Number(i.unit_price) * Number(i.quantity),
       0
     );
 
-    const payRes = await axios.post(
-      "https://www.mrphonelb.com/api2/invoice_payments",
-      {
-        InvoicePayment: {
-          invoice_id: draft.id,
-          payment_method: "Credit___Debit_Card",
-          amount: totalWithoutFee,
-          transaction_id: txnId,
-          status: 0,
-          processed: false,
-          notes: "Pending Mastercard payment verification — 3.5% fee excluded.",
-        },
+    // ✅ Create pending payment (not marked paid)
+    const paymentPayload = {
+      InvoicePayment: {
+        invoice_id: draft.id,
+        payment_method: "Credit___Debit_Card",
+        amount: draftTotal,
+        transaction_id: txnId,
+        status: 0, // pending
+        notes: "Mastercard (pending)",
+        currency_code: currency,
+        processed: false,
       },
-      {
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          apikey: DAFTRA_API_KEY,
-        },
-      }
-    );
+    };
 
-    console.log("💰 Pending payment created:", payRes.data?.id);
-    return res.redirect(`https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${draft.id}`);
+    await axios.post("https://www.mrphonelb.com/api2/invoice_payments", paymentPayload, {
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        apikey: DAFTRA_API_KEY,
+      },
+    });
+
+    console.log("🧾 Draft + pending payment created:", draft.id);
+    return res.redirect(
+      `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${draft.id}`
+    );
   } catch (err) {
     console.error("❌ Verify error:", err.response?.data || err.message);
-    return res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
+    res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
   }
 });
 
 /* ============================================================
-   🔍 Health check
+   3️⃣  HEALTH CHECK
 ============================================================ */
-app.get("/", (_req, res) => res.send("✅ MrPhone Mastercard backend running (final)."));
+app.get("/", (_req, res) => res.send("✅ MrPhone MPGS + Daftra backend ready."));
+
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
