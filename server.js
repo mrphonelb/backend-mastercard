@@ -74,7 +74,7 @@ app.post("/create-mastercard-session-existing", async (req, res) => {
 });
 
 /* =========================================================
-   ✅ Verify MPGS → Add Pending Payment to Existing Draft
+   ✅ Verify MPGS → Recreate same draft + pending payment
 ========================================================= */
 app.get("/verify-payment-existing", async (req, res) => {
   try {
@@ -85,7 +85,7 @@ app.get("/verify-payment-existing", async (req, res) => {
 
     const { invoice_id, total_gateway, currency } = ctx;
 
-    // ✅ Verify MPGS order
+    // Verify MPGS order
     const verify = await axios.get(
       `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/order/${encodeURIComponent(orderId)}`,
       {
@@ -108,51 +108,66 @@ app.get("/verify-payment-existing", async (req, res) => {
       ["CAPTURED", "AUTHORIZED", "SUCCESS"].includes(status);
 
     if (!success) {
-      console.warn("⚠️ Payment failed:", orderId);
       delete SESSIONS[orderId];
-      return res.redirect(
-        `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`
-      );
+      return res.redirect(`https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`);
     }
 
-    // ✅ Adjust amount (remove +3.5%)
+    // remove +3.5%
     const baseTotal = (Number(total_gateway) / 1.035).toFixed(2);
-    console.log(`💰 MPGS charged ${total_gateway} → Recording ${baseTotal} pending payment`);
 
-    // ✅ Create *pending* payment (won’t finalize the draft)
-    const paymentPayload = {
-      InvoicePayment: {
-        invoice_id: Number(invoice_id),
-        payment_method: "Credit___Debit_Card",
-        amount: Number(baseTotal),
-        transaction_id: txnId,
-        treasury_id: null,        // ✅ avoids cash posting
-        status: 2,                // ✅ 2 = pending
-        processed: false,         // ✅ required to prevent finalization
-        notes: `Mastercard payment pending (Txn: ${txnId})`,
-        currency_code: currency,
-        send_email: true,
-        notify_client: true,
+    // Get the original draft details
+    const draftData = await axios.get(`https://www.mrphonelb.com/api2/invoices/${invoice_id}`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${process.env.DAFTRA_BEARER}`,
       },
+    });
+
+    const original = draftData.data?.Invoice;
+    if (!original) throw new Error("Unable to load original draft");
+
+    // Recreate it as a new draft with a pending payment
+    const payload = {
+      Invoice: {
+        client_id: original.client_id,
+        draft: true,
+        is_offline: true,
+        currency_code: currency,
+        notes: `Auto-created draft after MPGS success. Original draft #${invoice_id}`,
+      },
+      InvoiceItem: original.InvoiceItem?.map(i => ({
+        item: i.item,
+        description: i.description || "",
+        unit_price: Number(i.unit_price),
+        quantity: Number(i.quantity),
+        product_id: i.product_id,
+      })),
+      Payment: [
+        {
+          payment_method: "Credit___Debit_Card",
+          amount: Number(baseTotal),
+          transaction_id: txnId,
+          status: 2, // pending
+          processed: false,
+          notes: `Mastercard payment pending (Txn: ${txnId})`,
+          currency_code: currency,
+        },
+      ],
     };
 
-    const resp = await axios.post(
-      "https://www.mrphonelb.com/api2/invoice_payments",
-      paymentPayload,
-      {
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          apikey: DAFTRA_API_KEY,
-        },
-      }
-    );
+    const newDraft = await axios.post("https://www.mrphonelb.com/api2/invoices", payload, {
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.DAFTRA_BEARER}`,
+      },
+    });
 
-    console.log(`✅ Pending payment created in Daftra for draft #${invoice_id}`, resp.data);
-
+    console.log("✅ New draft created with pending payment:", newDraft.data?.id);
     delete SESSIONS[orderId];
+
     res.redirect(
-      `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoice_id}`
+      `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${newDraft.data?.id || invoice_id}`
     );
   } catch (err) {
     console.error("❌ verify-payment-existing error:", err.response?.data || err.message);
