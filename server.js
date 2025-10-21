@@ -24,79 +24,78 @@ const TEMP_STORE = {};
 ============================================================ */
 app.post("/create-mastercard-session", async (req, res) => {
   try {
-    const { client_id, items = [], total, currency = "USD", invoice_id } = req.body;
+    const { client_id, invoice_id, total, currency = "USD" } = req.body;
 
-    if (!client_id || !total || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: "Missing client_id, total, or items[]" });
+    if (!client_id || !invoice_id || !total) {
+      return res.status(400).json({ error: "Missing client_id, invoice_id, or total" });
     }
 
     console.log(`💳 Starting MPGS session | invoice:${invoice_id} | total:$${total}`);
 
-   // ✅ Build Mastercard checkout payload
-const orderId = `ORDER-${Date.now()}-${invoice_id}`;
-const returnUrl = `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}&sessionId={session.id}`; 
-// MPGS replaces {session.id} automatically
-
-const payload = {
-  apiOperation: "INITIATE_CHECKOUT",
-  checkoutMode: "WEBSITE",
-  order: {
-    id: orderId,
-    amount: Number(total),
-    currency,
-    description: `Mr Phone LB - Invoice ${invoice_id}`,
-  },
-  interaction: {
-    operation: "PURCHASE",
-    merchant: {
-      name: "Mr Phone Lebanon",
-      logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
-      url: "https://www.mrphonelb.com",
-    },
-    returnUrl, // ✅ session.id will be replaced at runtime by Mastercard
-    redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`,
-    retryAttemptCount: 2,
-    displayControl: {
-      billingAddress: "HIDE",
-      customerEmail: "HIDE",
-    },
-  },
-};
-
-
-    // Create session
-    const resp = await axios.post(
+    // STEP 1 — Create session (no returnUrl yet)
+    const initResp = await axios.post(
       `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
+      { apiOperation: "CREATE_CHECKOUT_SESSION" },
+      {
+        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    const sessionId = initResp.data?.session?.id;
+    if (!sessionId) throw new Error("Failed to get MPGS session.id");
+
+    // STEP 2 — Update session with order + return URL
+    const orderId = `ORDER-${invoice_id}-${Date.now()}`;
+    const payload = {
+      apiOperation: "UPDATE_SESSION",
+      order: {
+        id: orderId,
+        amount: Number(total),
+        currency,
+        description: `Mr Phone LB - Invoice ${invoice_id}`,
+      },
+      interaction: {
+        operation: "PURCHASE",
+        merchant: {
+          name: "Mr Phone Lebanon",
+          logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+          url: "https://www.mrphonelb.com",
+        },
+        returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}&sessionId=${sessionId}`,
+        redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`,
+        retryAttemptCount: 2,
+        displayControl: {
+          billingAddress: "HIDE",
+          customerEmail: "HIDE",
+        },
+      },
+    };
+
+    await axios.put(
+      `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session/${sessionId}`,
       payload,
       {
         auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
         headers: { "Content-Type": "application/json" },
-        timeout: 20000,
       }
     );
 
-    const data = resp.data;
-    if (!data?.session?.id) throw new Error("MPGS did not return session.id");
+    // Store in memory for later verification
+    TEMP_STORE[sessionId] = { client_id, invoice_id, total, currency };
+    TEMP_STORE[invoice_id] = TEMP_STORE[sessionId];
 
-    // Store session + cart
-    // ✅ Store session and also invoice ID for fallback
-TEMP_STORE[data.session.id] = { client_id, items, total, currency, invoice_id };
-TEMP_STORE[invoice_id] = TEMP_STORE[data.session.id]; // fallback lookup if sessionId missing
-    console.log("✅ MPGS session created:", data.session.id);
-
-    return res.json({
-      ok: true,
-      session: data.session,
-      successIndicator: data.successIndicator || null,
-    });
+    console.log("✅ MPGS session created:", sessionId);
+    res.json({ ok: true, session: { id: sessionId } });
   } catch (err) {
     console.error("❌ Session creation error:", err.response?.data || err.message);
-    return res.status(500).json({
+    res.status(500).json({
       error: "Failed to create Mastercard session",
       debug: err.response?.data || err.message,
     });
   }
 });
+
 
 /* ============================================================
    💳 STEP 2: Verify payment → Create draft + pending payment
