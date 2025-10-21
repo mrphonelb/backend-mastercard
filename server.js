@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Environment Variables
+// ✅ Environment variables
 const HOST = process.env.HOST;
 const MERCHANT_ID = process.env.MERCHANT_ID;
 const API_PASSWORD = process.env.API_PASSWORD;
@@ -58,55 +58,31 @@ app.post("/create-mastercard-session", async (req, res) => {
     res.json(response.data);
   } catch (err) {
     console.error("❌ Mastercard Session Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to create session", debug: err.response?.data || err.message });
+    res.status(500).json({
+      error: "Failed to create session",
+      debug: err.response?.data || err.message
+    });
   }
 });
 
 /* ====================================================
-   💵 Create Daftra Paid Invoice (after successful payment)
+   🧾 Create Daftra Paid Invoice After Payment
    ==================================================== */
 app.post("/payment-success", async (req, res) => {
   try {
-    const { client_id, client_name, client_email, base_amount, session_id } = req.body;
-    if (!base_amount || !session_id)
-      return res.status(400).json({ error: "Missing base_amount or session_id" });
+    const { client_id, base_amount, session_id } = req.body;
+    if (!client_id || !base_amount || !session_id)
+      return res.status(400).json({ error: "Missing client_id, base_amount, or session_id" });
 
-    // ✅ Step 1: Ensure we have a client in Daftra
-    let finalClientId = client_id;
-    if (!finalClientId || finalClientId === 0) {
-      console.log("👤 No client_id provided — searching for 'Online Customer'");
-      const clientSearch = await axios.get(`${DAFTRA_API}/clients?name=Online%20Customer`, {
-        headers: { "apikey": API_KEY, "Accept": "application/json" }
-      });
+    console.log(`🧾 Creating paid Daftra invoice for client ${client_id}`);
 
-      if (clientSearch.data?.result === "successful" && clientSearch.data?.data?.length > 0) {
-        finalClientId = clientSearch.data.data[0].id;
-      } else {
-        console.log("👤 Creating new Daftra client: Online Customer");
-        const newClient = await axios.post(
-          `${DAFTRA_API}/clients`,
-          {
-            Client: {
-              name: client_name || "Online Customer",
-              email: client_email || "",
-              currency_code: "USD",
-              type: "client"
-            }
-          },
-          { headers: { "apikey": API_KEY, "Content-Type": "application/json" } }
-        );
-        finalClientId = newClient.data.id;
-      }
-    }
-
-    // ✅ Step 2: Prepare invoice data
     const fee = +(base_amount * 0.035).toFixed(2);
     const totalPaid = +(base_amount + fee).toFixed(2);
     const today = new Date().toISOString().split("T")[0];
 
     const invoicePayload = {
       Invoice: {
-        client_id: finalClientId,
+        client_id: client_id,
         date: today,
         currency_code: "USD",
         draft: false,
@@ -130,17 +106,15 @@ app.post("/payment-success", async (req, res) => {
         }
       ],
       Payment: [
-  {
-    payment_method: "Credit / Debit Card",  // ✅ match Daftra’s actual name
-    amount: totalPaid,
-    transaction_id: session_id,
-    date: new Date().toISOString().replace("T", " ").slice(0, 19)
-  }
-]
-
+        {
+          payment_method: "Credit / Debit Card", // Must match Daftra’s name exactly
+          amount: totalPaid,
+          transaction_id: session_id,
+          date: new Date().toISOString().replace("T", " ").slice(0, 19)
+        }
+      ]
     };
 
-    // ✅ Step 3: Send to Daftra
     const daftraRes = await axios.post(`${DAFTRA_API}/invoices`, invoicePayload, {
       headers: {
         "Accept": "application/json",
@@ -151,7 +125,6 @@ app.post("/payment-success", async (req, res) => {
 
     console.log("✅ Daftra Invoice Created:", daftraRes.data);
     res.json(daftraRes.data);
-
   } catch (err) {
     console.error("❌ Daftra Invoice Creation Error:", err.response?.data || err.message);
     res.status(500).json({
@@ -165,7 +138,7 @@ app.post("/payment-success", async (req, res) => {
    🧠 Health Check
    ==================================================== */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend ready for Mastercard + Daftra Integration (Paid Invoice).");
+  res.send("✅ MrPhone Backend ready for Mastercard + Daftra (Registered Client Integration).");
 });
 
 /* ====================================================
