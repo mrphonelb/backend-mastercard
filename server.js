@@ -69,7 +69,7 @@ app.post("/create-mastercard-session-existing", async (req, res) => {
 });
 
 /* =========================================================
-   2️⃣ Verify MPGS → Add Pending Payment + Resend Email
+   2️⃣ Verify MPGS → Add Pending Payment + Keep Draft
 ========================================================= */
 app.get("/verify-payment-existing", async (req, res) => {
   try {
@@ -126,8 +126,8 @@ app.get("/verify-payment-existing", async (req, res) => {
           payment_method: "Credit___Debit_Card",
           amount: Number(baseTotal),
           transaction_id: txnId,
-          status: 2,
-          processed: false,
+          status: 2,         // pending
+          processed: false,  // unprocessed
           notes: `Mastercard payment pending (Txn: ${txnId})`,
           currency_code: currency,
         },
@@ -142,15 +142,8 @@ app.get("/verify-payment-existing", async (req, res) => {
       { headers }
     );
 
-    // ✅ Step 3: Send email notifications
-    await axios.post(
-      `https://www.mrphonelb.com/api2/invoices/${invoice_id}/send_email`,
-      { to_client: true, to_staff: true },
-      { headers }
-    );
-
     delete SESSIONS[orderId];
-    console.log(`✅ Draft kept + pending payment + emails sent for #${invoice_id}`);
+    console.log(`✅ Draft kept + pending payment recorded for #${invoice_id}`);
 
     res.redirect(`https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoice_id}`);
   } catch (err) {
@@ -158,6 +151,7 @@ app.get("/verify-payment-existing", async (req, res) => {
     res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
   }
 });
+
 
 /* =========================================================
    Health Check
