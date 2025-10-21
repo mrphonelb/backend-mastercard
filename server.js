@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 10000;
 // ✅ Daftra API Key
 const DAFTRA_API_KEY = "dd904f6a2745e5206ea595caac587a850e990504";
 
-// ✅ Temporary store for order data (simple memory)
+// ✅ Temporary store for order data (simple in-memory)
 const TEMP_STORE = {};
 
 /* ====================================================
@@ -30,7 +30,7 @@ app.post("/create-mastercard-session", async (req, res) => {
       return res.status(400).json({ error: "Missing client_id, total, or items[]" });
     }
 
-    const checkoutTotal = Number(total); // this total already includes +3.5%
+    const checkoutTotal = Number(total); // includes +3.5% fee
     console.log(`💳 Starting MPGS session | Client:${client_id} | Amount:$${checkoutTotal}`);
 
     // ✅ Build MPGS payload
@@ -73,9 +73,13 @@ app.post("/create-mastercard-session", async (req, res) => {
 
     // ✅ Store order info temporarily
     TEMP_STORE[data.session.id] = { client_id, items, currency };
-
     console.log("✅ MPGS session created:", data.session.id);
-    return res.json({ ok: true, session: data.session, successIndicator: data.successIndicator });
+
+    return res.json({
+      ok: true,
+      session: data.session,
+      successIndicator: data.successIndicator
+    });
   } catch (err) {
     console.error("❌ Session creation error:", err.response?.data || err.message);
     return res.status(500).json({
@@ -86,12 +90,13 @@ app.post("/create-mastercard-session", async (req, res) => {
 });
 
 /* ====================================================
-   💳 2) Verify Payment → Create Draft + Payment (no fees)
+   💳 2) Verify Payment → Create Draft + Payment + Finalize
    ==================================================== */
 app.get("/verify-payment/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
-    const sessionId = req.query.sessionId; // MPGS adds ?sessionId=...
+    const sessionId = req.query.sessionId; // MPGS appends ?sessionId=...
+
     if (!sessionId || !TEMP_STORE[sessionId]) {
       console.warn("⚠️ Missing order data for session:", sessionId);
       return res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
@@ -123,7 +128,7 @@ app.get("/verify-payment/:clientId", async (req, res) => {
 
     console.log("✅ Payment success — creating Daftra draft & payment record...");
 
-    // ✅ 1. Create Daftra draft with actual cart items (no fee)
+    // ✅ 1. Create Daftra draft with real items (no 3.5% fee)
     const draftResp = await axios.post(
       "https://www.mrphonelb.com/api2/invoices",
       {
@@ -154,17 +159,42 @@ app.get("/verify-payment/:clientId", async (req, res) => {
     if (!draft?.id) throw new Error("Failed to create Daftra draft");
     console.log("✅ Draft created:", draft.id);
 
-    // ✅ 2. Add payment (equal to draft total only — no fee)
+    // ✅ 2. Record payment (no fee, with transaction ID)
     const totalWithoutFee = items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
+    const transactionId = sessionId; // use MPGS session as Txn reference
 
-    await axios.post(
-      "https://www.mrphonelb.com/api2/invoices/payments",
+    const paymentPayload = {
+      InvoicePayment: {
+        invoice_id: draft.id,
+        payment_method: "Credit___Debit_Card", // Daftra internal key
+        amount: totalWithoutFee,
+        transaction_id: transactionId,
+        notes: `💳 Online Mastercard payment confirmed. Customer paid $${paidAmount} (includes +3.5% fee not in Daftra).`,
+        processed: true
+      }
+    };
+
+    const paymentRes = await axios.post(
+      "https://www.mrphonelb.com/api2/invoice_payments",
+      paymentPayload,
       {
-        InvoicePayment: {
-          invoice_id: draft.id,
-          amount: totalWithoutFee,
-          method: "Credit/Debit Card (Mastercard)",
-          notes: "Online payment via Mastercard (3.5% card fee not included in Daftra)"
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          apikey: DAFTRA_API_KEY
+        }
+      }
+    );
+
+    console.log("💰 Payment recorded:", paymentRes.data);
+
+    // ✅ 3. Finalize draft → issued invoice
+    await axios.put(
+      `https://www.mrphonelb.com/api2/invoices/${draft.id}`,
+      {
+        Invoice: {
+          draft: false,
+          notes: `✅ Finalized after successful Mastercard payment (Txn: ${transactionId})`
         }
       },
       {
@@ -176,7 +206,7 @@ app.get("/verify-payment/:clientId", async (req, res) => {
       }
     );
 
-    console.log("💰 Payment recorded for draft:", draft.id);
+    console.log(`📄 Draft ${draft.id} finalized as normal invoice`);
     return res.redirect(`https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${draft.id}`);
   } catch (err) {
     console.error("❌ Verification error:", err.response?.data || err.message);
@@ -184,14 +214,12 @@ app.get("/verify-payment/:clientId", async (req, res) => {
   }
 });
 
-
 /* ====================================================
-   🧾 CREATE DAFTRA DRAFT (Manual Endpoint for Testing)
+   🧾 Manual Test Endpoints
    ==================================================== */
 app.post("/create-draft", async (req, res) => {
   try {
     const { client_id, total, currency_code = "USD", items = [] } = req.body;
-
     if (!client_id || !total || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Missing client_id, total, or items[]" });
     }
@@ -202,9 +230,9 @@ app.post("/create-draft", async (req, res) => {
         draft: true,
         is_offline: true,
         currency_code,
-        notes: "✅ Draft created manually (Postman test)"
+        notes: "✅ Manual test draft via backend"
       },
-      InvoiceItem: items.map((i) => ({
+      InvoiceItem: items.map(i => ({
         item: i.item,
         description: i.description || "",
         unit_price: Number(i.unit_price),
@@ -212,17 +240,13 @@ app.post("/create-draft", async (req, res) => {
       }))
     };
 
-    const response = await axios.post(
-      "https://www.mrphonelb.com/api2/invoices",
-      payload,
-      {
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          apikey: "dd904f6a2745e5206ea595caac587a850e990504"
-        }
+    const response = await axios.post("https://www.mrphonelb.com/api2/invoices", payload, {
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        apikey: DAFTRA_API_KEY
       }
-    );
+    });
 
     console.log("✅ Daftra draft created:", response.data);
     return res.json(response.data);
@@ -235,19 +259,9 @@ app.post("/create-draft", async (req, res) => {
   }
 });
 
-
-/* ====================================================
-   💰 CREATE PAYMENT FOR DAFTRA INVOICE (FINAL VERSION)
-   ==================================================== */
 app.post("/create-payment", async (req, res) => {
   try {
-    const {
-      invoice_id,
-      amount,
-      payment_method = "Credit/Debit Card (Mastercard)",
-      notes = "Online payment via Mastercard (3.5% customer fee not recorded in Daftra)"
-    } = req.body;
-
+    const { invoice_id, amount, payment_method = "Credit___Debit_Card" } = req.body;
     if (!invoice_id || !amount) {
       return res.status(400).json({ error: "Missing invoice_id or amount" });
     }
@@ -257,7 +271,7 @@ app.post("/create-payment", async (req, res) => {
         invoice_id,
         payment_method,
         amount: Number(amount),
-        notes,
+        notes: "💳 Manual payment via Mastercard (for testing)",
         processed: true
       }
     };
@@ -269,7 +283,7 @@ app.post("/create-payment", async (req, res) => {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          apikey: "dd904f6a2745e5206ea595caac587a850e990504"
+          apikey: DAFTRA_API_KEY
         }
       }
     );
@@ -286,10 +300,14 @@ app.post("/create-payment", async (req, res) => {
 });
 
 /* ====================================================
-   🧠 3) Health
+   🧠 3) Health Check
    ==================================================== */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend Ready — MPGS first, then Daftra draft + payment (no fee inside Daftra).");
+  res.send(
+    "✅ MrPhone Backend Ready — MPGS → Daftra draft → payment → finalize invoice (no fee in Daftra)."
+  );
 });
 
-app.listen(PORT, () => console.log(`✅ MrPhone backend running on port ${PORT}`));
+app.listen(PORT, () =>
+  console.log(`✅ MrPhone backend running on port ${PORT}`)
+);
