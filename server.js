@@ -184,6 +184,59 @@ app.get("/verify-payment/:clientId", async (req, res) => {
   }
 });
 
+
+/* ====================================================
+   🧾 CREATE DAFTRA DRAFT (Manual Endpoint for Testing)
+   ==================================================== */
+app.post("/create-draft", async (req, res) => {
+  try {
+    const { client_id, total, currency_code = "USD", items = [] } = req.body;
+
+    if (!client_id || !total || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "Missing client_id, total, or items[]" });
+    }
+
+    const payload = {
+      Invoice: {
+        client_id,
+        draft: true,
+        is_offline: true,
+        currency_code,
+        notes: "✅ Draft created manually (Postman test)"
+      },
+      InvoiceItem: items.map((i) => ({
+        item: i.item,
+        description: i.description || "",
+        unit_price: Number(i.unit_price),
+        quantity: Number(i.quantity)
+      }))
+    };
+
+    const response = await axios.post(
+      "https://www.mrphonelb.com/api2/invoices",
+      payload,
+      {
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          apikey: "dd904f6a2745e5206ea595caac587a850e990504"
+        }
+      }
+    );
+
+    console.log("✅ Daftra draft created:", response.data);
+    return res.json(response.data);
+  } catch (err) {
+    console.error("❌ Daftra draft error:", err.response?.data || err.message);
+    return res.status(500).json({
+      error: "Failed to create Daftra draft",
+      debug: err.response?.data || err.message
+    });
+  }
+});
+
+
+
 /* ====================================================
    🧠 3) Health
    ==================================================== */
