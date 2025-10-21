@@ -96,34 +96,38 @@ TEMP_STORE[invoice_id] = TEMP_STORE[data.session.id]; // fallback lookup if sess
 app.get("/verify-payment/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
-    const sessionId = req.query.sessionId;
+    const sessionIdFromQuery = req.query.sessionId;
 const invoice_id = req.query.invoice_id;
 
-// ✅ Lookup by sessionId or fallback to invoice_id
+// ✅ Lookup stored data
 const stored =
-  (sessionId && TEMP_STORE[sessionId]) ||
+  (sessionIdFromQuery && TEMP_STORE[sessionIdFromQuery]) ||
   (invoice_id && TEMP_STORE[invoice_id]);
 
 if (!stored) {
-  console.warn("⚠️ Missing stored session/cart for:", sessionId || invoice_id);
+  console.warn("⚠️ Missing stored session/cart for:", sessionIdFromQuery || invoice_id);
   return res.redirect(`https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`);
 }
 
-const { client_id, items, currency } = stored;
-delete TEMP_STORE[sessionId];
+// ✅ Extract real sessionId from stored object
+const { client_id, items, currency, sessionId } = stored;
+const actualSessionId = sessionId || sessionIdFromQuery;
+
+delete TEMP_STORE[actualSessionId];
 delete TEMP_STORE[invoice_id];
 
+console.log(`🔍 Verifying MPGS session ${actualSessionId} for invoice ${invoice_id}`);
 
-    console.log(`🔍 Verifying MPGS session ${sessionId} for invoice ${invoice_id}`);
 
     // Get session status
-    const verify = await axios.get(
-      `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session/${sessionId}`,
-      {
-        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+  const verify = await axios.get(
+  `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session/${actualSessionId}`,
+  {
+    auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
+    headers: { "Content-Type": "application/json" },
+  }
+);
+
 
     const v = verify.data;
     const result = v.result || v.status;
