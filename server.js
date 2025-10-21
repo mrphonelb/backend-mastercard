@@ -50,7 +50,7 @@ app.post("/create-mastercard-session", async (req, res) => {
     url: "https://www.mrphonelb.com",
   },
   // ✅ Fix: pass sessionId dynamically via MPGS placeholder
-  returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}&sessionId={checkoutSession.id}`,
+  returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}`,
   redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`,
   retryAttemptCount: 2,
   displayControl: { billingAddress: "HIDE", customerEmail: "HIDE" },
