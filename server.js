@@ -43,17 +43,18 @@ app.post("/create-mastercard-session", async (req, res) => {
         description: `Mr Phone Lebanon | Invoice #${invoice_id}`,
       },
       interaction: {
-        operation: "PURCHASE",
-        merchant: {
-          name: "Mr Phone Lebanon",
-          logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
-          url: "https://www.mrphonelb.com",
-        },
-        returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}`,
-        redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`,
-        retryAttemptCount: 2,
-        displayControl: { billingAddress: "HIDE", customerEmail: "HIDE" },
-      },
+  operation: "PURCHASE",
+  merchant: {
+    name: "Mr Phone Lebanon",
+    logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+    url: "https://www.mrphonelb.com",
+  },
+  // ✅ Fix: pass sessionId dynamically via MPGS placeholder
+  returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}&sessionId={checkoutSession.id}`,
+  redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`,
+  retryAttemptCount: 2,
+  displayControl: { billingAddress: "HIDE", customerEmail: "HIDE" },
+},
     };
 
     const resp = await axios.post(
