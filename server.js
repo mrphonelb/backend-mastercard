@@ -11,11 +11,13 @@ app.use(express.json());
 const HOST = process.env.HOST; // e.g. https://creditlibanais-netcommerce.gateway.mastercard.com
 const MERCHANT_ID = process.env.MERCHANT_ID;
 const API_PASSWORD = process.env.API_PASSWORD;
-const DAFTRA_API_KEY = "dd904f6a2745e5206ea595caac587a850e990504";
 const PORT = process.env.PORT || 10000;
 
+// ✅ Daftra OAuth Token (you can refresh it manually if expired)
+const DAFTRA_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiMjA3MzU4MzdkNjdiNWJjYmMzZGRjMTE4NjJiOThjNWE1ZTBkYzdkNWE3ODliNmE3NmI1MjY3MjZiZWU3M2RlYjA5ZWQ1MWRiNzBkZDdmMWQiLCJpYXQiOjE3NDQ2MjA5MjIuMjU4NzM5OSwiZXhwIjoxODM5MzE1MzgyLjI0NjM3Miwic3ViIjoiNDA2MzI3MSIsInNjb3BlcyI6W10sInByb3ZpZGVyIjoib3duZXIiLCJuYmYiOjE3NDQ1MzQ1ODIuMjU4NzU4MX0.QBCnITMq1eIcdr0jx3JkJxU3QzB-PGPCAF0bKLbDOUmQf_o_XGUoEkLTQen75aBM9faIteUrfCwxZ4I8h_LoB-eprQK4Qxg-pbTLOoEixv6WMKTGL_AwCVpuWFoPWbSKVRDb43yFqGoLHuKLBe9-3I2fIjlXguvGbODaECEeL-cJkab6-oqlidiH9dpB-hFqQv1Nsd3uQUxu6C5PJDFyI1si10xy80Hu3jlMX7OS2V8SkFhsq11l2xTgHDDsXf9z4spp3di7dUzoXgFPFoXlp47zGRvc8kNLkr8_Dz3omttPsm82mKZNsCwAatac6Fxw7PJlHjTaTmSukHx9YAd9Nuc6q_AZ_7y2YhvYBj1DhxeVLb-i2BlxXTTJYgjZhqgLvh--4Z5XZCiXv2tagSKggNhNIoKKDftsEDYY8_5fWddMOeRI085yuB5vyrNrnGmv4E8_9VQI43nGuUyVWOFp5EvfQSPB8Db0byG95aSl9ub2d2Akclt3aZ9fWgV3Agxu34x6EQ1YGBrwoHJ_0XvUOWhI3T4_N1lmQapnpVhAEfvyVKccS1jAFO18OvKN-depxYzNIkkbnrxZ9uEsRpsj44oJlSt8QYKKSDn1t9gObkRWLqdmltgayskP4F1Rm2OE-b3FagG_IeKUyua5SFtsi_EU4JP37Kz2yqJWF5yW4R0";
+
 /* ====================================================
-   💳 1. Create Mastercard Checkout Session
+   💳 1. Create Mastercard Session
    ==================================================== */
 app.post("/create-mastercard-session", async (req, res) => {
   try {
@@ -32,21 +34,21 @@ app.post("/create-mastercard-session", async (req, res) => {
         operation: "PURCHASE",
         merchant: {
           name: "Mr Phone Lebanon",
-          url: "https://www.mrphonelb.com",
+          url: "https://www.mrphonelb.com"
         },
         displayControl: {
           billingAddress: "HIDE",
           customerEmail: "HIDE",
-          shipping: "HIDE",
+          shipping: "HIDE"
         },
-        returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
+        returnUrl: "https://www.mrphonelb.com/client/contents/checkout"
       },
       order: {
         id: orderId,
         amount: amount,
         currency: currency,
-        description: "Mr Phone Lebanon Online Purchase",
-      },
+        description: "Mr Phone Lebanon Online Purchase"
+      }
     };
 
     const response = await axios.post(
@@ -55,9 +57,9 @@ app.post("/create-mastercard-session", async (req, res) => {
       {
         auth: {
           username: `merchant.${MERCHANT_ID}`,
-          password: API_PASSWORD,
+          password: API_PASSWORD
         },
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" }
       }
     );
 
@@ -67,18 +69,17 @@ app.post("/create-mastercard-session", async (req, res) => {
     console.error("❌ Mastercard Session Error:", err.response?.data || err.message);
     res.status(500).json({
       error: "Failed to create Mastercard session",
-      debug: err.response?.data || err.message,
+      debug: err.response?.data || err.message
     });
   }
 });
 
 /* ====================================================
-   🧾 2. Create Draft Invoice in Daftra
+   🧾 2. Create Draft Invoice (OAuth Auth)
    ==================================================== */
 app.post("/create-draft", async (req, res) => {
   try {
     const { client_id, items, total } = req.body;
-
     if (!client_id || !items || !total)
       return res.status(400).json({ error: "Missing client_id, items, or total" });
 
@@ -97,7 +98,7 @@ app.post("/create-draft", async (req, res) => {
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        apikey: DAFTRA_API_KEY,
+        Authorization: `Bearer ${DAFTRA_TOKEN}`,
       },
       timeout: 15000,
     });
@@ -114,7 +115,7 @@ app.post("/create-draft", async (req, res) => {
 });
 
 /* ====================================================
-   💳 3. On Mastercard Payment Success → Mark Invoice Paid
+   💳 3. Payment Success → Mark Invoice Paid
    ==================================================== */
 app.post("/payment-success", async (req, res) => {
   try {
@@ -122,20 +123,17 @@ app.post("/payment-success", async (req, res) => {
     if (!invoiceId || !amount || !transactionId)
       return res.status(400).json({ error: "Missing invoiceId, amount, or transactionId" });
 
-    // Calculate base + fee separation (if needed)
     const fee = +(amount * 0.035).toFixed(2);
-    const base = +(amount / 1.035).toFixed(2);
-
     const payload = {
       Invoice: {
         draft: false,
         payment_status: "paid",
-        notes: "Auto-marked as paid after Mastercard success",
+        notes: "Auto-marked as paid after Mastercard payment success",
       },
       InvoiceItem: [
         {
           item: "Credit Card Fee",
-          description: "3.5% Mastercard Processing Fee",
+          description: "3.5% Mastercard Payment Fee",
           unit_price: fee,
           quantity: 1,
         },
@@ -143,7 +141,7 @@ app.post("/payment-success", async (req, res) => {
       Payment: [
         {
           payment_method: "Credit / Debit Card",
-          amount: amount,
+          amount,
           transaction_id: transactionId,
           date: new Date().toISOString().slice(0, 19).replace("T", " "),
         },
@@ -157,7 +155,7 @@ app.post("/payment-success", async (req, res) => {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          apikey: DAFTRA_API_KEY,
+          Authorization: `Bearer ${DAFTRA_TOKEN}`,
         },
         timeout: 15000,
       }
@@ -178,12 +176,9 @@ app.post("/payment-success", async (req, res) => {
    🧠 Health Check
    ==================================================== */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend running: Mastercard + Daftra Hybrid Integration Ready.");
+  res.send("✅ MrPhone Backend Ready: Mastercard + Daftra OAuth Integration Working.");
 });
 
-/* ====================================================
-   🚀 Start Server
-   ==================================================== */
 app.listen(PORT, () => {
   console.log(`✅ MrPhone backend running on port ${PORT}`);
 });
