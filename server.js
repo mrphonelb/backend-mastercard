@@ -7,18 +7,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Environment variables
+// ✅ Mastercard credentials
 const HOST = process.env.HOST;
 const MERCHANT_ID = process.env.MERCHANT_ID;
 const API_PASSWORD = process.env.API_PASSWORD;
 const PORT = process.env.PORT || 10000;
 
-// ✅ Daftra API Info
-const DAFTRA_API = "https://www.mrphonelb.com/api2";
-const API_KEY = "dd904f6a2745e5206ea595caac587a850e990504";
+// ✅ Daftra API credentials
+const DAFTRA_API = "https://www.mrphonelb.com/api2/invoices";
+const DAFTRA_KEY = "dd904f6a2745e5206ea595caac587a850e990504";
 
 /* ====================================================
-   💳 Create Mastercard Checkout Session
+   💳 CREATE MASTERCARD SESSION
    ==================================================== */
 app.post("/create-mastercard-session", async (req, res) => {
   try {
@@ -33,24 +33,34 @@ app.post("/create-mastercard-session", async (req, res) => {
       checkoutMode: "WEBSITE",
       interaction: {
         operation: "PURCHASE",
-        merchant: { name: "Mr Phone Lebanon", url: "https://www.mrphonelb.com" },
-        displayControl: { billingAddress: "HIDE", customerEmail: "HIDE", shipping: "HIDE" },
-        returnUrl: "https://www.mrphonelb.com/client/contents/checkout"
+        merchant: {
+          name: "Mr Phone Lebanon",
+          url: "https://www.mrphonelb.com",
+        },
+        displayControl: {
+          billingAddress: "HIDE",
+          customerEmail: "HIDE",
+          shipping: "HIDE",
+        },
+        returnUrl: "https://www.mrphonelb.com/client/contents/checkout",
       },
       order: {
         id: orderId,
         amount: amount,
         currency: currency,
-        description: "Mr Phone Lebanon Online Purchase"
-      }
+        description: "Mr Phone Lebanon Online Purchase",
+      },
     };
 
     const response = await axios.post(
       `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
       payload,
       {
-        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
-        headers: { "Content-Type": "application/json" }
+        auth: {
+          username: `merchant.${MERCHANT_ID}`,
+          password: API_PASSWORD,
+        },
+        headers: { "Content-Type": "application/json" },
       }
     );
 
@@ -60,24 +70,27 @@ app.post("/create-mastercard-session", async (req, res) => {
     console.error("❌ Mastercard Session Error:", err.response?.data || err.message);
     res.status(500).json({
       error: "Failed to create session",
-      debug: err.response?.data || err.message
+      debug: err.response?.data || err.message,
     });
   }
 });
 
 /* ====================================================
-   🧾 Create Daftra Paid Invoice After Payment
+   🧾 CREATE DAFTRA INVOICE AFTER SUCCESSFUL PAYMENT
    ==================================================== */
 app.post("/payment-success", async (req, res) => {
   try {
     const { client_id, base_amount, session_id } = req.body;
-    if (!client_id || !base_amount || !session_id)
-      return res.status(400).json({ error: "Missing client_id, base_amount, or session_id" });
 
-    console.log(`🧾 Creating paid Daftra invoice for client ${client_id}`);
+    if (!client_id || !base_amount || !session_id) {
+      console.error("❌ Missing fields in body:", req.body);
+      return res.status(400).json({ error: "Missing client_id, base_amount, or session_id" });
+    }
+
+    console.log(`🧾 Creating Daftra Paid Invoice for client_id: ${client_id}`);
 
     const fee = +(base_amount * 0.035).toFixed(2);
-    const totalPaid = +(base_amount + fee).toFixed(2);
+    const total = +(base_amount + fee).toFixed(2);
     const today = new Date().toISOString().split("T")[0];
 
     const invoicePayload = {
@@ -87,62 +100,70 @@ app.post("/payment-success", async (req, res) => {
         currency_code: "USD",
         draft: false,
         payment_status: "paid",
-        name: "Mr Phone LB Online Purchase",
-        notes: `Paid via Mastercard (Session: ${session_id})`,
-        total: totalPaid
+        name: "Online Mastercard Payment",
+        notes: `Mastercard Payment Session: ${session_id}`,
+        is_offline: true,
       },
       InvoiceItem: [
         {
           item: "Online Order",
-          description: "Checkout Payment",
+          description: "Mr Phone LB Online Purchase",
           unit_price: base_amount,
-          quantity: 1
+          quantity: 1,
         },
         {
           item: "Card Payment Fee (3.5%)",
-          description: "Processing fee for Mastercard payment",
+          description: "Processing Fee",
           unit_price: fee,
-          quantity: 1
-        }
+          quantity: 1,
+        },
       ],
       Payment: [
         {
-          payment_method: "Credit / Debit Card", // Must match Daftra’s name exactly
-          amount: totalPaid,
+          payment_method: "Credit / Debit Card",
+          amount: total,
           transaction_id: session_id,
-          date: new Date().toISOString().replace("T", " ").slice(0, 19)
-        }
-      ]
+          date: new Date().toISOString().replace("T", " ").slice(0, 19),
+        },
+      ],
+      InvoiceCustomField: {},
+      Deposit: {},
+      InvoiceReminder: {},
+      Document: {},
+      DocumentTitle: {},
     };
 
-    const daftraRes = await axios.post(`${DAFTRA_API}/invoices`, invoicePayload, {
+    console.log("📤 Sending Invoice to Daftra:", JSON.stringify(invoicePayload, null, 2));
+
+    const daftraResponse = await axios.post(DAFTRA_API, invoicePayload, {
       headers: {
-        "Accept": "application/json",
-        "apikey": API_KEY,
-        "Content-Type": "application/json"
-      }
+        Accept: "application/json",
+        apikey: DAFTRA_KEY,
+        "Content-Type": "application/json",
+      },
+      timeout: 20000,
     });
 
-    console.log("✅ Daftra Invoice Created:", daftraRes.data);
-    res.json(daftraRes.data);
+    console.log("✅ Daftra Invoice Created:", daftraResponse.data);
+    res.json(daftraResponse.data);
   } catch (err) {
-    console.error("❌ Daftra Invoice Creation Error:", err.response?.data || err.message);
+    console.error("❌ Daftra Invoice Error:", err.response?.data || err.message);
     res.status(500).json({
       error: "Failed to create Daftra invoice",
-      debug: err.response?.data || err.message
+      debug: err.response?.data || err.message,
     });
   }
 });
 
 /* ====================================================
-   🧠 Health Check
+   🧠 HEALTH CHECK
    ==================================================== */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend ready for Mastercard + Daftra (Registered Client Integration).");
+  res.send("✅ MrPhone Backend Ready — Mastercard + Daftra Integration (Paid Invoice)");
 });
 
 /* ====================================================
-   🚀 Start Server
+   🚀 START SERVER
    ==================================================== */
 app.listen(PORT, () => {
   console.log(`✅ MrPhone backend running on port ${PORT}`);
