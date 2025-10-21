@@ -75,7 +75,7 @@ app.post("/create-mastercard-session", async (req, res) => {
 });
 
 /* ====================================================
-   🧾 2. Create Draft Invoice (OAuth Auth)
+   🧾 2. Create Draft Invoice (API Key Auth)
    ==================================================== */
 app.post("/create-draft", async (req, res) => {
   try {
@@ -89,19 +89,23 @@ app.post("/create-draft", async (req, res) => {
         draft: true,
         is_offline: true,
         currency_code: "USD",
-        notes: "Online draft created from checkout",
+        notes: "Online draft created from checkout (API key mode)"
       },
-      InvoiceItem: items,
+      InvoiceItem: items
     };
 
-    const response = await axios.post("https://www.mrphonelb.com/api2/invoices", payload, {
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${DAFTRA_TOKEN}`,
-      },
-      timeout: 15000,
-    });
+    const response = await axios.post(
+      "https://www.mrphonelb.com/api2/invoices",
+      payload,
+      {
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          apikey: "dd904f6a2745e5206ea595caac587a850e990504"
+        },
+        timeout: 15000
+      }
+    );
 
     console.log("✅ Draft Invoice Created:", response.data);
     res.json(response.data);
@@ -109,13 +113,13 @@ app.post("/create-draft", async (req, res) => {
     console.error("❌ Daftra Draft Error:", err.response?.data || err.message);
     res.status(500).json({
       error: "Failed to create Daftra draft",
-      debug: err.response?.data || err.message,
+      debug: err.response?.data || err.message
     });
   }
 });
 
 /* ====================================================
-   💳 3. Payment Success → Mark Invoice Paid
+   💳 3. Payment Success → Mark Invoice Paid (API Key)
    ==================================================== */
 app.post("/payment-success", async (req, res) => {
   try {
@@ -128,24 +132,24 @@ app.post("/payment-success", async (req, res) => {
       Invoice: {
         draft: false,
         payment_status: "paid",
-        notes: "Auto-marked as paid after Mastercard payment success",
+        notes: "Auto-marked as paid after Mastercard payment success"
       },
       InvoiceItem: [
         {
           item: "Credit Card Fee",
           description: "3.5% Mastercard Payment Fee",
           unit_price: fee,
-          quantity: 1,
-        },
+          quantity: 1
+        }
       ],
       Payment: [
         {
           payment_method: "Credit / Debit Card",
           amount,
           transaction_id: transactionId,
-          date: new Date().toISOString().slice(0, 19).replace("T", " "),
-        },
-      ],
+          date: new Date().toISOString().slice(0, 19).replace("T", " ")
+        }
+      ]
     };
 
     const response = await axios.post(
@@ -155,9 +159,9 @@ app.post("/payment-success", async (req, res) => {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          Authorization: `Bearer ${DAFTRA_TOKEN}`,
+          apikey: "dd904f6a2745e5206ea595caac587a850e990504"
         },
-        timeout: 15000,
+        timeout: 15000
       }
     );
 
@@ -167,10 +171,11 @@ app.post("/payment-success", async (req, res) => {
     console.error("❌ Payment Update Error:", err.response?.data || err.message);
     res.status(500).json({
       error: "Failed to mark invoice paid",
-      debug: err.response?.data || err.message,
+      debug: err.response?.data || err.message
     });
   }
 });
+
 
 /* ====================================================
    🧠 Health Check
