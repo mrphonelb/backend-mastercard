@@ -40,7 +40,7 @@ app.post("/create-mastercard-session", async (req, res) => {
         id: orderId,
         amount: checkoutTotal, // exact checkout total (no +3.5)
         currency,
-        description: `Mr Phone LB - ${orderId}`
+        description: `Mr Phone - Order ${orderId}`
       },
       interaction: {
         operation: "PURCHASE",
