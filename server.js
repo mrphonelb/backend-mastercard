@@ -236,6 +236,49 @@ app.post("/create-draft", async (req, res) => {
 });
 
 
+/* ====================================================
+   💰 CREATE PAYMENT FOR DAFTRA DRAFT (Manual Test)
+   ==================================================== */
+app.post("/create-payment", async (req, res) => {
+  try {
+    const { invoice_id, amount, method = "Credit/Debit Card (Mastercard)" } = req.body;
+
+    if (!invoice_id || !amount) {
+      return res.status(400).json({ error: "Missing invoice_id or amount" });
+    }
+
+    const payload = {
+      InvoicePayment: {
+        invoice_id,
+        amount: Number(amount),
+        method,
+        notes: "💳 Manual payment added via backend (for testing)"
+      }
+    };
+
+    const response = await axios.post(
+      "https://www.mrphonelb.com/api2/invoices/payments",
+      payload,
+      {
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          apikey: "dd904f6a2745e5206ea595caac587a850e990504"
+        }
+      }
+    );
+
+    console.log("✅ Payment created:", response.data);
+    return res.json(response.data);
+  } catch (err) {
+    console.error("❌ Payment creation error:", err.response?.data || err.message);
+    return res.status(500).json({
+      error: "Failed to create Daftra payment",
+      debug: err.response?.data || err.message
+    });
+  }
+});
+
 
 /* ====================================================
    🧠 3) Health
