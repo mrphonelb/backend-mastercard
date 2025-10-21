@@ -74,7 +74,7 @@ app.post("/create-mastercard-session-existing", async (req, res) => {
 });
 
 /* =========================================================
-   2️⃣ Verify MPGS result → Add pending payment to existing draft
+   ✅ Verify MPGS → Add Pending Payment to Existing Draft
 ========================================================= */
 app.get("/verify-payment-existing", async (req, res) => {
   try {
@@ -85,7 +85,7 @@ app.get("/verify-payment-existing", async (req, res) => {
 
     const { invoice_id, total_gateway, currency } = ctx;
 
-    // Verify MPGS order
+    // ✅ Verify MPGS order
     const verify = await axios.get(
       `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/order/${encodeURIComponent(orderId)}`,
       {
@@ -115,27 +115,28 @@ app.get("/verify-payment-existing", async (req, res) => {
       );
     }
 
-    // ✅ Convert MPGS paid total back to draft base total (remove +3.5%)
+    // ✅ Adjust amount (remove +3.5%)
     const baseTotal = (Number(total_gateway) / 1.035).toFixed(2);
-    console.log(`💰 MPGS charged: ${total_gateway} → Recording ${baseTotal} in Daftra`);
+    console.log(`💰 MPGS charged ${total_gateway} → Recording ${baseTotal} pending payment`);
 
-    // ✅ Add pending payment to the existing draft
+    // ✅ Create *pending* payment (won’t finalize the draft)
     const paymentPayload = {
       InvoicePayment: {
         invoice_id: Number(invoice_id),
         payment_method: "Credit___Debit_Card",
         amount: Number(baseTotal),
         transaction_id: txnId,
-        status: 0, // ✅ Pending
-        processed: false,
+        treasury_id: null,        // ✅ avoids cash posting
+        status: 2,                // ✅ 2 = pending
+        processed: false,         // ✅ required to prevent finalization
         notes: `Mastercard payment pending (Txn: ${txnId})`,
         currency_code: currency,
-        send_email: true,      // ✅ notify owner
-        notify_client: true,   // ✅ notify client
+        send_email: true,
+        notify_client: true,
       },
     };
 
-    await axios.post(
+    const resp = await axios.post(
       "https://www.mrphonelb.com/api2/invoice_payments",
       paymentPayload,
       {
@@ -147,9 +148,9 @@ app.get("/verify-payment-existing", async (req, res) => {
       }
     );
 
-    console.log(`✅ Pending payment recorded for draft #${invoice_id}`);
-    delete SESSIONS[orderId];
+    console.log(`✅ Pending payment created in Daftra for draft #${invoice_id}`, resp.data);
 
+    delete SESSIONS[orderId];
     res.redirect(
       `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoice_id}`
     );
@@ -158,6 +159,7 @@ app.get("/verify-payment-existing", async (req, res) => {
     res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
   }
 });
+
 
 /* =========================================================
    Health Check
