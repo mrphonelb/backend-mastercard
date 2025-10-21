@@ -7,14 +7,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ✅ Environment Variables
 const HOST = process.env.HOST;
 const MERCHANT_ID = process.env.MERCHANT_ID;
 const API_PASSWORD = process.env.API_PASSWORD;
-const DAFTRA_API_KEY = "dd904f6a2745e5206ea595caac587a850e990504";
 const PORT = process.env.PORT || 10000;
 
+// ✅ Daftra API Info
+const DAFTRA_API = "https://www.mrphonelb.com/api2";
+const API_KEY = "dd904f6a2745e5206ea595caac587a850e990504";
+
 /* ====================================================
-   💳 1. Create Mastercard Session (with +3.5% fee)
+   💳 Create Mastercard Checkout Session
    ==================================================== */
 app.post("/create-mastercard-session", async (req, res) => {
   try {
@@ -22,32 +26,22 @@ app.post("/create-mastercard-session", async (req, res) => {
     if (!orderId || !amount || !currency)
       return res.status(400).json({ error: "Missing orderId, amount, or currency." });
 
-    // ✅ Add 3.5% Mastercard fee
-    const chargedAmount = (parseFloat(amount) * 1.035).toFixed(2);
-
-    console.log(`💰 Creating Mastercard session for ${chargedAmount} ${currency} | Order: ${orderId}`);
+    console.log(`💰 Creating Mastercard session for ${amount} ${currency} | Order: ${orderId}`);
 
     const payload = {
       apiOperation: "INITIATE_CHECKOUT",
       checkoutMode: "WEBSITE",
       interaction: {
         operation: "PURCHASE",
-        merchant: {
-          name: "Mr Phone Lebanon",
-          url: "https://www.mrphonelb.com"
-        },
-        displayControl: {
-          billingAddress: "HIDE",
-          customerEmail: "HIDE",
-          shipping: "HIDE"
-        },
+        merchant: { name: "Mr Phone Lebanon", url: "https://www.mrphonelb.com" },
+        displayControl: { billingAddress: "HIDE", customerEmail: "HIDE", shipping: "HIDE" },
         returnUrl: "https://www.mrphonelb.com/client/contents/checkout"
       },
       order: {
         id: orderId,
-        amount: chargedAmount,
-        currency,
-        description: "Mr Phone Lebanon Online Purchase (+3.5% card fee)"
+        amount: amount,
+        currency: currency,
+        description: "Mr Phone Lebanon Online Purchase"
       }
     };
 
@@ -64,32 +58,55 @@ app.post("/create-mastercard-session", async (req, res) => {
     res.json(response.data);
   } catch (err) {
     console.error("❌ Mastercard Session Error:", err.response?.data || err.message);
-    res.status(500).json({
-      error: "Failed to create session",
-      debug: err.response?.data || err.message
-    });
+    res.status(500).json({ error: "Failed to create session", debug: err.response?.data || err.message });
   }
 });
 
 /* ====================================================
-   💵 2. Create Daftra Paid Invoice (after payment success)
+   💵 Create Daftra Paid Invoice (after successful payment)
    ==================================================== */
 app.post("/payment-success", async (req, res) => {
   try {
     const { client_id, client_name, client_email, base_amount, session_id } = req.body;
-
     if (!base_amount || !session_id)
       return res.status(400).json({ error: "Missing base_amount or session_id" });
 
+    // ✅ Step 1: Ensure we have a client in Daftra
+    let finalClientId = client_id;
+    if (!finalClientId || finalClientId === 0) {
+      console.log("👤 No client_id provided — searching for 'Online Customer'");
+      const clientSearch = await axios.get(`${DAFTRA_API}/clients?name=Online%20Customer`, {
+        headers: { "apikey": API_KEY, "Accept": "application/json" }
+      });
+
+      if (clientSearch.data?.result === "successful" && clientSearch.data?.data?.length > 0) {
+        finalClientId = clientSearch.data.data[0].id;
+      } else {
+        console.log("👤 Creating new Daftra client: Online Customer");
+        const newClient = await axios.post(
+          `${DAFTRA_API}/clients`,
+          {
+            Client: {
+              name: client_name || "Online Customer",
+              email: client_email || "",
+              currency_code: "USD",
+              type: "client"
+            }
+          },
+          { headers: { "apikey": API_KEY, "Content-Type": "application/json" } }
+        );
+        finalClientId = newClient.data.id;
+      }
+    }
+
+    // ✅ Step 2: Prepare invoice data
     const fee = +(base_amount * 0.035).toFixed(2);
     const totalPaid = +(base_amount + fee).toFixed(2);
     const today = new Date().toISOString().split("T")[0];
 
-    const payload = {
+    const invoicePayload = {
       Invoice: {
-        client_id: client_id || 0,
-        client_first_name: client_name || "Online Customer",
-        client_email: client_email || "",
+        client_id: finalClientId,
         date: today,
         currency_code: "USD",
         draft: false,
@@ -122,20 +139,18 @@ app.post("/payment-success", async (req, res) => {
       ]
     };
 
-    const response = await axios.post(
-      "https://www.mrphonelb.com/api2/invoices",
-      payload,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "apikey": "dd904f6a2745e5206ea595caac587a850e990504"
-        }
+    // ✅ Step 3: Send to Daftra
+    const daftraRes = await axios.post(`${DAFTRA_API}/invoices`, invoicePayload, {
+      headers: {
+        "Accept": "application/json",
+        "apikey": API_KEY,
+        "Content-Type": "application/json"
       }
-    );
+    });
 
-    console.log("✅ Daftra Invoice Created:", response.data);
-    res.json(response.data);
+    console.log("✅ Daftra Invoice Created:", daftraRes.data);
+    res.json(daftraRes.data);
+
   } catch (err) {
     console.error("❌ Daftra Invoice Creation Error:", err.response?.data || err.message);
     res.status(500).json({
@@ -145,12 +160,11 @@ app.post("/payment-success", async (req, res) => {
   }
 });
 
-
 /* ====================================================
-   🧠 3. Health Check
+   🧠 Health Check
    ==================================================== */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend ready for Mastercard (+3.5% fee) and Daftra integration.");
+  res.send("✅ MrPhone Backend ready for Mastercard + Daftra Integration (Paid Invoice).");
 });
 
 /* ====================================================
