@@ -60,7 +60,6 @@ app.post("/create-mastercard-session", async (req, res) => {
         merchant: {
           name: "Mr Phone Lebanon",
           logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
-          url: "https://www.mrphonelb.com",
         },
         returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}&sessionId=${sessionId}`,
         redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`,
