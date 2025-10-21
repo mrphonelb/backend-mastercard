@@ -123,7 +123,7 @@ app.get("/verify-payment-existing", async (req, res) => {
         payment_method: "Credit___Debit_Card",
         amount: Number(total),
         transaction_id: txnId,
-        status: 0, // Pending
+        status: 2, // Pending
         processed: false,
         notes: `Mastercard payment pending (Txn: ${txnId})`,
         currency_code: currency,
