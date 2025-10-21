@@ -105,10 +105,11 @@ app.get("/verify-payment/:clientId", async (req, res) => {
     const { clientId } = req.params;
     const { sessionId, orderId } = req.query;
 
-    if (!sessionId || !orderId) {
-      console.warn("⚠️ Missing sessionId/orderId");
-      return res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
-    }
+    if (!orderId) {
+  console.warn("⚠️ Missing orderId");
+  return res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
+}
+
 
     const key = sessionId || orderId;
     const store = TEMP_STORE[key];
