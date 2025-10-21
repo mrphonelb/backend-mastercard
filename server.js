@@ -123,26 +123,26 @@ app.post("/create-draft", async (req, res) => {
    ==================================================== */
 app.post("/payment-success", async (req, res) => {
   try {
-    const { invoiceId, amount, transactionId } = req.body;
-    if (!invoiceId || !amount || !transactionId)
-      return res.status(400).json({ error: "Missing invoiceId, amount, or transactionId" });
+    const { invoiceId, amount, transactionId, client_id } = req.body;
+    if (!invoiceId || !amount || !transactionId || !client_id)
+      return res.status(400).json({ error: "Missing invoiceId, amount, transactionId, or client_id" });
 
     const fee = +(amount * 0.035).toFixed(2);
 
-    // 🔹 Build payload to mark invoice paid (new full object)
     const payload = {
       Invoice: {
-        id: invoiceId, // ✅ include ID here
+        id: invoiceId,
+        client_id, // ✅ Required by Daftra
         draft: false,
-        payment_status: "paid",
-        notes: "Auto-marked as paid after Mastercard payment success",
         is_offline: true,
-        currency_code: "USD"
+        payment_status: "paid",
+        currency_code: "USD",
+        notes: "Automatically marked as paid after Mastercard payment success"
       },
       InvoiceItem: [
         {
-          item: "Credit / Debit Payment",
-          description: "Online Mastercard payment",
+          item: "Credit / Debit Card Payment",
+          description: "Order completed successfully via Mastercard Gateway",
           unit_price: (amount - fee).toFixed(2),
           quantity: 1
         },
@@ -163,7 +163,6 @@ app.post("/payment-success", async (req, res) => {
       ]
     };
 
-    // 🔹 Send request to Daftra
     const response = await axios.post(
       "https://www.mrphonelb.com/api2/invoices",
       payload,
@@ -177,7 +176,7 @@ app.post("/payment-success", async (req, res) => {
       }
     );
 
-    console.log("✅ Invoice marked paid:", response.data);
+    console.log("✅ Invoice Marked as Paid:", response.data);
     res.json(response.data);
   } catch (err) {
     console.error("❌ Payment Update Error:", err.response?.data || err.message);
@@ -187,6 +186,7 @@ app.post("/payment-success", async (req, res) => {
     });
   }
 });
+
 
 
 /* ====================================================
