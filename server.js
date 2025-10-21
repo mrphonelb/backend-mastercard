@@ -130,13 +130,14 @@ app.post("/payment-success", async (req, res) => {
         }
       ],
       Payment: [
-        {
-          payment_method: "Credit / Debit Card (Mastercard)",
-          amount: totalPaid,
-          transaction_id: session_id,
-          date: new Date().toISOString().replace("T", " ").slice(0, 19)
-        }
-      ]
+  {
+    payment_method: "Credit / Debit Card",  // ✅ match Daftra’s actual name
+    amount: totalPaid,
+    transaction_id: session_id,
+    date: new Date().toISOString().replace("T", " ").slice(0, 19)
+  }
+]
+
     };
 
     // ✅ Step 3: Send to Daftra
