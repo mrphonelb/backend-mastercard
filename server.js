@@ -42,7 +42,7 @@ app.post("/create-mastercard-session", async (req, res) => {
     id: orderId,
     amount: amount,
     currency: currency,
-    description: "Mr Phone Lebanon Online Purchase"
+    description: "Mr Phone Lb"
   }
 };
 
