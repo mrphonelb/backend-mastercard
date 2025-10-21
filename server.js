@@ -32,29 +32,37 @@ app.post("/create-mastercard-session", async (req, res) => {
 
     console.log(`💳 Starting MPGS session | invoice:${invoice_id} | total:$${total}`);
 
-    // Prepare MPGS INITIATE_CHECKOUT payload
-    const orderId = `ORDER-${invoice_id}-${Date.now()}`;
-    const payload = {
-      apiOperation: "INITIATE_CHECKOUT",
-      checkoutMode: "WEBSITE",
-      order: {
-        id: orderId,
-        amount: Number(total),
-        currency,
-        description: `Mr Phone LB - Invoice ${invoice_id}`,
-      },
-      interaction: {
-        operation: "PURCHASE",
-        merchant: {
-          name: "Mr Phone Lebanon",
-          logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
-          url: "https://www.mrphonelb.com",
-        },
-        returnUrl: `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}`,
-        redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`,
-        displayControl: { billingAddress: "HIDE", customerEmail: "HIDE" },
-      },
-    };
+   // ✅ Build Mastercard checkout payload
+const orderId = `ORDER-${Date.now()}-${invoice_id}`;
+const returnUrl = `https://mrphone-backend.onrender.com/verify-payment/${client_id}?invoice_id=${invoice_id}&sessionId={session.id}`; 
+// MPGS replaces {session.id} automatically
+
+const payload = {
+  apiOperation: "INITIATE_CHECKOUT",
+  checkoutMode: "WEBSITE",
+  order: {
+    id: orderId,
+    amount: Number(total),
+    currency,
+    description: `Mr Phone LB - Invoice ${invoice_id}`,
+  },
+  interaction: {
+    operation: "PURCHASE",
+    merchant: {
+      name: "Mr Phone Lebanon",
+      logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+      url: "https://www.mrphonelb.com",
+    },
+    returnUrl, // ✅ session.id will be replaced at runtime by Mastercard
+    redirectMerchantUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`,
+    retryAttemptCount: 2,
+    displayControl: {
+      billingAddress: "HIDE",
+      customerEmail: "HIDE",
+    },
+  },
+};
+
 
     // Create session
     const resp = await axios.post(
