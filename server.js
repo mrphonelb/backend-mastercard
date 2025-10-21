@@ -155,7 +155,7 @@ app.post("/payment-success", async (req, res) => {
       ],
       Payment: [
   {
-    payment_method: 26, // ✅ Daftra Payment Gateway ID for Credit/Debit Card
+    payment_method: "Credit___Debit_Card", // ✅ exact internal Daftra name
     amount: amount,
     transaction_id: transactionId,
     date: new Date().toISOString().slice(0, 19).replace("T", " ")
