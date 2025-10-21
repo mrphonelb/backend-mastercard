@@ -101,21 +101,21 @@ TEMP_STORE[orderId] = TEMP_STORE[data.session.id];
    - Payment = SAME amount as draft, status = 0 (pending)
 ============================================================ */
 app.get("/verify-payment/:clientId", async (req, res) => {
-  const { clientId } = req.params;
-  const sessionId = req.query.sessionId;
-  const orderId = req.query.orderId;
+  try {
+    const { clientId } = req.params;
+    const sessionId = req.query.sessionId;
+    const orderId = req.query.orderId;
 
-  const key = sessionId || orderId; // ✅ use whichever is available
-  if (!key || !TEMP_STORE[key]) {
-    console.warn("⚠️ Missing stored cart for:", key);
-    return res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
-  }
+    const key = sessionId || orderId; // ✅ use whichever is available
+    if (!key || !TEMP_STORE[key]) {
+      console.warn("⚠️ Missing stored cart for:", key);
+      return res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
+    }
 
-  const { client_id, items, total, currency } = TEMP_STORE[key];
-  delete TEMP_STORE[key];
-  ...
-});
+    const { client_id, items, total, currency } = TEMP_STORE[key];
+    delete TEMP_STORE[key]; // cleanup memory
 
+    console.log(`🔍 Verifying MPGS session/order ${key} for client ${client_id}`);
 
     // Get session status/result
     const verify = await axios.get(
