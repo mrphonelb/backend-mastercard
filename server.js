@@ -13,8 +13,8 @@ const MERCHANT_ID = process.env.MERCHANT_ID;
 const API_PASSWORD = process.env.API_PASSWORD;
 const PORT = process.env.PORT || 10000;
 
-// ✅ Daftra OAuth Token (you can refresh it manually if expired)
-const DAFTRA_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiMjA3MzU4MzdkNjdiNWJjYmMzZGRjMTE4NjJiOThjNWE1ZTBkYzdkNWE3ODliNmE3NmI1MjY3MjZiZWU3M2RlYjA5ZWQ1MWRiNzBkZDdmMWQiLCJpYXQiOjE3NDQ2MjA5MjIuMjU4NzM5OSwiZXhwIjoxODM5MzE1MzgyLjI0NjM3Miwic3ViIjoiNDA2MzI3MSIsInNjb3BlcyI6W10sInByb3ZpZGVyIjoib3duZXIiLCJuYmYiOjE3NDQ1MzQ1ODIuMjU4NzU4MX0.QBCnITMq1eIcdr0jx3JkJxU3QzB-PGPCAF0bKLbDOUmQf_o_XGUoEkLTQen75aBM9faIteUrfCwxZ4I8h_LoB-eprQK4Qxg-pbTLOoEixv6WMKTGL_AwCVpuWFoPWbSKVRDb43yFqGoLHuKLBe9-3I2fIjlXguvGbODaECEeL-cJkab6-oqlidiH9dpB-hFqQv1Nsd3uQUxu6C5PJDFyI1si10xy80Hu3jlMX7OS2V8SkFhsq11l2xTgHDDsXf9z4spp3di7dUzoXgFPFoXlp47zGRvc8kNLkr8_Dz3omttPsm82mKZNsCwAatac6Fxw7PJlHjTaTmSukHx9YAd9Nuc6q_AZ_7y2YhvYBj1DhxeVLb-i2BlxXTTJYgjZhqgLvh--4Z5XZCiXv2tagSKggNhNIoKKDftsEDYY8_5fWddMOeRI085yuB5vyrNrnGmv4E8_9VQI43nGuUyVWOFp5EvfQSPB8Db0byG95aSl9ub2d2Akclt3aZ9fWgV3Agxu34x6EQ1YGBrwoHJ_0XvUOWhI3T4_N1lmQapnpVhAEfvyVKccS1jAFO18OvKN-depxYzNIkkbnrxZ9uEsRpsj44oJlSt8QYKKSDn1t9gObkRWLqdmltgayskP4F1Rm2OE-b3FagG_IeKUyua5SFtsi_EU4JP37Kz2yqJWF5yW4R0";
+// ✅ Daftra API key (not OAuth)
+const DAFTRA_API_KEY = "dd904f6a2745e5206ea595caac587a850e990504";
 
 /* ====================================================
    💳 1. Create Mastercard Session
@@ -32,15 +32,8 @@ app.post("/create-mastercard-session", async (req, res) => {
       checkoutMode: "WEBSITE",
       interaction: {
         operation: "PURCHASE",
-        merchant: {
-          name: "Mr Phone Lebanon",
-          url: "https://www.mrphonelb.com"
-        },
-        displayControl: {
-          billingAddress: "HIDE",
-          customerEmail: "HIDE",
-          shipping: "HIDE"
-        },
+        merchant: { name: "Mr Phone Lebanon", url: "https://www.mrphonelb.com" },
+        displayControl: { billingAddress: "HIDE", customerEmail: "HIDE", shipping: "HIDE" },
         returnUrl: "https://www.mrphonelb.com/client/contents/checkout"
       },
       order: {
@@ -55,10 +48,7 @@ app.post("/create-mastercard-session", async (req, res) => {
       `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
       payload,
       {
-        auth: {
-          username: `merchant.${MERCHANT_ID}`,
-          password: API_PASSWORD
-        },
+        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
         headers: { "Content-Type": "application/json" }
       }
     );
@@ -75,7 +65,34 @@ app.post("/create-mastercard-session", async (req, res) => {
 });
 
 /* ====================================================
-   🧾 2. Create Draft Invoice (API Key Auth)
+   🔍 2. Retrieve Mastercard Order Details
+   ==================================================== */
+app.get("/retrieve-order/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    console.log(`🔍 Retrieving Mastercard order: ${orderId}`);
+
+    const response = await axios.get(
+      `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/order/${orderId}`,
+      {
+        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+
+    console.log("✅ Order Retrieved:", response.data);
+    res.json(response.data);
+  } catch (err) {
+    console.error("❌ Retrieve Order Error:", err.response?.data || err.message);
+    res.status(500).json({
+      error: "Failed to retrieve Mastercard order",
+      debug: err.response?.data || err.message
+    });
+  }
+});
+
+/* ====================================================
+   🧾 3. Create Draft Invoice in Daftra (API Key)
    ==================================================== */
 app.post("/create-draft", async (req, res) => {
   try {
@@ -89,7 +106,7 @@ app.post("/create-draft", async (req, res) => {
         draft: true,
         is_offline: true,
         currency_code: "USD",
-        notes: "Online draft created from checkout (API key mode)"
+        notes: "Online draft created after Mastercard payment verification"
       },
       InvoiceItem: items
     };
@@ -101,7 +118,7 @@ app.post("/create-draft", async (req, res) => {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          apikey: "dd904f6a2745e5206ea595caac587a850e990504"
+          apikey: DAFTRA_API_KEY
         },
         timeout: 15000
       }
@@ -119,82 +136,85 @@ app.post("/create-draft", async (req, res) => {
 });
 
 /* ====================================================
-   💳 3. Payment Success → Mark Invoice Paid (API Key Mode)
+   💳 4. Verify Payment + Redirect
    ==================================================== */
-app.post("/payment-success", async (req, res) => {
+app.get("/verify-payment/:orderId/:clientId", async (req, res) => {
   try {
-    const { invoiceId, amount, transactionId, client_id } = req.body;
-    if (!invoiceId || !amount || !transactionId || !client_id)
-      return res.status(400).json({ error: "Missing invoiceId, amount, transactionId, or client_id" });
+    const { orderId, clientId } = req.params;
+    console.log(`🔍 Verifying payment for Order ${orderId} | Client ${clientId}`);
 
-    const fee = +(amount * 0.035).toFixed(2);
-
-    const payload = {
-      Invoice: {
-        id: invoiceId,
-        client_id, // ✅ Required by Daftra
-        draft: false,
-        is_offline: true,
-        payment_status: "paid",
-        currency_code: "USD",
-        notes: "Automatically marked as paid after Mastercard payment success"
-      },
-      InvoiceItem: [
-        {
-          item: "Credit / Debit Card Payment",
-          description: "Order completed successfully via Mastercard Gateway",
-          unit_price: (amount - fee).toFixed(2),
-          quantity: 1
-        },
-        {
-          item: "Credit Card Fee (3.5%)",
-          description: "Payment processing fee",
-          unit_price: fee,
-          quantity: 1
-        }
-      ],
-      Payment: [
-  {
-    payment_method: "Credit___Debit_Card", // ✅ exact internal Daftra name
-    amount: amount,
-    transaction_id: transactionId,
-    date: new Date().toISOString().slice(0, 19).replace("T", " ")
-  }
-]
-
-    };
-
-    const response = await axios.post(
-      "https://www.mrphonelb.com/api2/invoices",
-      payload,
+    // ✅ Step 1: Retrieve Mastercard order details
+    const orderResponse = await axios.get(
+      `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/order/${orderId}`,
       {
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          apikey: "dd904f6a2745e5206ea595caac587a850e990504"
-        },
-        timeout: 15000
+        auth: { username: `merchant.${MERCHANT_ID}`, password: API_PASSWORD },
+        headers: { "Content-Type": "application/json" }
       }
     );
 
-    console.log("✅ Invoice Marked as Paid:", response.data);
-    res.json(response.data);
+    const orderData = orderResponse.data;
+    console.log("✅ Order Data Retrieved:", orderData);
+
+    // ✅ Step 2: Check payment result
+    if (orderData.result === "SUCCESS") {
+      const amount = orderData.amount;
+
+      // ✅ Step 3: Create Daftra draft invoice
+      const draftRes = await axios.post(
+        "https://www.mrphonelb.com/api2/invoices",
+        {
+          Invoice: {
+            client_id: clientId,
+            draft: true,
+            is_offline: true,
+            currency_code: "USD",
+            notes: `Verified Mastercard payment success for order ${orderId}`
+          },
+          InvoiceItem: [
+            {
+              item: "Online Order Payment",
+              description: `Mastercard order ${orderId}`,
+              unit_price: amount,
+              quantity: 1
+            }
+          ]
+        },
+        {
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            apikey: DAFTRA_API_KEY
+          }
+        }
+      );
+
+      const draftData = draftRes.data;
+      console.log("✅ Draft created after verification:", draftData);
+
+      if (draftData.result === "successful" && draftData.id) {
+        // ✅ Redirect to thank you page
+        return res.redirect(
+          `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${draftData.id}`
+        );
+      } else {
+        console.warn("⚠️ Draft creation failed:", draftData);
+        return res.redirect("https://www.mrphonelb.com/client/contents/payment_error");
+      }
+    } else {
+      console.warn("⚠️ Payment not successful:", orderData.result);
+      return res.redirect("https://www.mrphonelb.com/client/contents/payment_error");
+    }
   } catch (err) {
-    console.error("❌ Payment Update Error:", err.response?.data || err.message);
-    res.status(500).json({
-      error: "Failed to mark invoice paid",
-      debug: err.response?.data || err.message
-    });
+    console.error("❌ Payment Verification Error:", err.response?.data || err.message);
+    return res.redirect("https://www.mrphonelb.com/client/contents/payment_error");
   }
 });
 
-
-
 /* ====================================================
-   🧠 Health Check
+   🧠 5. Health Check
    ==================================================== */
 app.get("/", (req, res) => {
-  res.send("✅ MrPhone Backend Ready: Mastercard + Daftra OAuth Integration Working.");
+  res.send("✅ MrPhone Backend Ready: Mastercard + Daftra Integration Working.");
 });
 
 app.listen(PORT, () => {
