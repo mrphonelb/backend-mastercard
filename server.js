@@ -59,10 +59,6 @@ const payload = {
   }
 };
 
-// Save in TEMP_STORE by both IDs
-TEMP_STORE[data.session.id] = { client_id, items, total: checkoutTotal, currency };
-TEMP_STORE[orderId] = TEMP_STORE[data.session.id];
-
 
     const resp = await axios.post(
       `${HOST}/api/rest/version/100/merchant/${MERCHANT_ID}/session`,
@@ -78,7 +74,10 @@ TEMP_STORE[orderId] = TEMP_STORE[data.session.id];
     if (!data?.session?.id) throw new Error("MPGS did not return a session.id");
 
     // Store cart for use after success
-    TEMP_STORE[data.session.id] = { client_id, items, total: checkoutTotal, currency };
+
+    // Save in TEMP_STORE by both IDs
+TEMP_STORE[data.session.id] = { client_id, items, total: checkoutTotal, currency };
+TEMP_STORE[orderId] = TEMP_STORE[data.session.id];
 
     console.log("✅ MPGS session created:", data.session.id);
     return res.json({
