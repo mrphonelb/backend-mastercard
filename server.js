@@ -47,11 +47,15 @@ app.post("/create-mastercard-session", async (req, res) => {
         id: String(orderId),
         amount: Number(amount),
         currency: currency,
-        description: "Mr Phone Lebanon Online Purchase"
+        description: "Mr Phone"
       },
       interaction: {
-        operation: "PURCHASE",
-        merchant: { name: "Mr Phone Lebanon", url: "https://www.mrphonelb.com" },
+  operation: "PURCHASE",
+  merchant: {
+    name: "Mr Phone Lebanon",
+    logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
+    url: "https://www.mrphonelb.com"
+  },
         // success redirect (always)
         returnUrl,
         // failure/cancel handling (retry, then redirect)
