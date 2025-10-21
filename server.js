@@ -71,7 +71,9 @@ app.post("/create-mastercard-session", async (req, res) => {
     if (!data?.session?.id) throw new Error("MPGS did not return session.id");
 
     // Store session + cart
-    TEMP_STORE[data.session.id] = { client_id, items, total, currency, invoice_id };
+    // ✅ Store session and also invoice ID for fallback
+TEMP_STORE[data.session.id] = { client_id, items, total, currency, invoice_id };
+TEMP_STORE[invoice_id] = TEMP_STORE[data.session.id]; // fallback lookup if sessionId missing
     console.log("✅ MPGS session created:", data.session.id);
 
     return res.json({
@@ -95,15 +97,22 @@ app.get("/verify-payment/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
     const sessionId = req.query.sessionId;
-    const invoice_id = req.query.invoice_id;
+const invoice_id = req.query.invoice_id;
 
-    if (!sessionId || !TEMP_STORE[sessionId]) {
-      console.warn("⚠️ Missing stored session/cart for:", sessionId);
-      return res.redirect(`https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`);
-    }
+// ✅ Lookup by sessionId or fallback to invoice_id
+const stored =
+  (sessionId && TEMP_STORE[sessionId]) ||
+  (invoice_id && TEMP_STORE[invoice_id]);
 
-    const { client_id, items, currency } = TEMP_STORE[sessionId];
-    delete TEMP_STORE[sessionId];
+if (!stored) {
+  console.warn("⚠️ Missing stored session/cart for:", sessionId || invoice_id);
+  return res.redirect(`https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`);
+}
+
+const { client_id, items, currency } = stored;
+delete TEMP_STORE[sessionId];
+delete TEMP_STORE[invoice_id];
+
 
     console.log(`🔍 Verifying MPGS session ${sessionId} for invoice ${invoice_id}`);
 
