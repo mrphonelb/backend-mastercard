@@ -123,13 +123,15 @@ app.get("/verify-payment-existing", async (req, res) => {
       {
         InvoicePayment: {
           invoice_id: Number(invoice_id),
-          payment_method: "Credit___Debit_Card",
-          amount: Number(baseTotal),
-          transaction_id: txnId,
-          status: 2,         // pending
-          processed: false,  // unprocessed
-          notes: `Mastercard payment pending (Txn: ${txnId})`,
-          currency_code: currency,
+      payment_method: "Credit___Debit_Card",
+      amount: Number(baseTotal),
+      transaction_id: txnId,
+      treasury_id: 0,           // ✅ Ensures no treasury posting
+      status: "2",              // ✅ must be string
+      processed: "0",           // ✅ must be string
+      response_message: "Pending approval (Mastercard verification)",
+      notes: `Mastercard payment pending (Txn: ${txnId})`,
+      currency_code: currency,
         },
       },
       { headers }
