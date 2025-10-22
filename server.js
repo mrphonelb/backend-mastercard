@@ -98,18 +98,20 @@ app.get("/verify-payment-existing", async (req, res) => {
       (Array.isArray(v.transactions) && v.transactions[0]?.transaction?.id) ||
       orderId;
 
+    const message =
+      v.error?.explanation ||
+      v.acquirerMessage ||
+      v.gatewayCode ||
+      v.result ||
+      "Unknown response";
+
     const success =
       result === "SUCCESS" &&
       ["CAPTURED", "AUTHORIZED", "SUCCESS"].includes(status);
 
-    if (!success) {
-      console.warn("⚠️ Payment failed:", orderId);
-      delete SESSIONS[orderId];
-      return res.redirect(`https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}`);
-    }
-
+    // ✅ Adjust amount (remove +3.5%)
     const baseTotal = (Number(total_gateway) / 1.035).toFixed(2);
-    console.log(`💰 MPGS charged ${total_gateway} → Recording ${baseTotal} pending payment`);
+    const time = encodeURIComponent(new Date().toLocaleString());
 
     const headers = {
       Accept: "application/json",
@@ -117,27 +119,40 @@ app.get("/verify-payment-existing", async (req, res) => {
       apikey: DAFTRA_API_KEY,
     };
 
-    // ✅ Step 1: Add pending payment (not processed)
+    if (!success) {
+      console.warn("⚠️ Payment failed:", orderId, "| Reason:", message);
+      delete SESSIONS[orderId];
+      return res.redirect(
+        `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoice_id}` +
+        `&order_id=${orderId}` +
+        `&txn_id=${txnId}` +
+        `&amount=${baseTotal}` +
+        `&time=${time}` +
+        `&message=${encodeURIComponent(message)}`
+      );
+    }
+
+    // ✅ Step 1: Add pending payment
     await axios.post(
       "https://www.mrphonelb.com/api2/invoice_payments",
       {
         InvoicePayment: {
           invoice_id: Number(invoice_id),
-      payment_method: "Credit___Debit_Card",
-      amount: Number(baseTotal),
-      transaction_id: txnId,
-      treasury_id: 0,           // ✅ Ensures no treasury posting
-      status: "2",              // ✅ must be string
-      processed: "0",           // ✅ must be string
-      response_message: "Pending approval (Mastercard verification)",
-      notes: `Mastercard payment pending (Txn: ${txnId})`,
-      currency_code: currency,
+          payment_method: "Credit___Debit_Card",
+          amount: Number(baseTotal),
+          transaction_id: txnId,
+          treasury_id: 0,
+          status: "2",        // pending
+          processed: "0",
+          response_message: "Pending approval (Mastercard verification)",
+          notes: `Mastercard payment pending (Txn: ${txnId})`,
+          currency_code: currency,
         },
       },
       { headers }
     );
 
-    // ✅ Step 2: Force invoice back to draft
+    // ✅ Step 2: Force invoice to remain draft
     await axios.put(
       `https://www.mrphonelb.com/api2/invoices/${invoice_id}`,
       { Invoice: { draft: true } },
@@ -147,19 +162,26 @@ app.get("/verify-payment-existing", async (req, res) => {
     delete SESSIONS[orderId];
     console.log(`✅ Draft kept + pending payment recorded for #${invoice_id}`);
 
-    res.redirect(`https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoice_id}`);
+    return res.redirect(
+      `https://www.mrphonelb.com/client/contents/thankyou` +
+      `?invoice_id=${invoice_id}` +
+      `&order_id=${orderId}` +
+      `&txn_id=${txnId}` +
+      `&amount=${baseTotal}` +
+      `&time=${time}` +
+      `&message=${encodeURIComponent("Payment Authorized")}`
+    );
   } catch (err) {
     console.error("❌ verify-payment-existing error:", err.response?.data || err.message);
     res.redirect("https://www.mrphonelb.com/client/contents/error?invoice_id=unknown");
   }
 });
 
-
 /* =========================================================
    Health Check
 ========================================================= */
 app.get("/", (_, res) =>
-  res.send("✅ MrPhone Backend — Draft Locked, Pending Payment, Emails Enabled")
+  res.send("✅ MrPhone Backend — Draft Locked, Pending Payment, Redirect Details Enabled")
 );
 
 app.listen(PORT, () =>
