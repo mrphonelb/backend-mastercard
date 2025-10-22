@@ -111,7 +111,8 @@ app.get("/verify-payment-existing", async (req, res) => {
 
     // ✅ Adjust amount (remove +3.5%)
     const baseTotal = (Number(total_gateway) / 1.035).toFixed(2);
-    const time = encodeURIComponent(new Date().toLocaleString());
+    const time = encodeURIComponent(new Date().toISOString());
+
 
     const headers = {
       Accept: "application/json",
