@@ -44,6 +44,7 @@ app.post("/create-mastercard-session-existing", async (req, res) => {
           logo: "https://www.mrphonelb.com/s3/files/91010354/shop_front/media/sliders/87848095-961a-4d20-b7ce-2adb572e445f.png",
         },
         returnUrl: `https://mrphone-backend.onrender.com/verify-payment-existing?orderId=${orderId}`,
+        cancelUrl: `https://www.mrphonelb.com/client/contents/checkout`,
         displayControl: { billingAddress: "HIDE", customerEmail: "HIDE" },
       },
     };
