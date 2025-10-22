@@ -35,7 +35,7 @@ app.post("/create-mastercard-session-existing", async (req, res) => {
         id: orderId,
         amount: Number(total_gateway),
         currency,
-        description: `Mr Phone LB - Invoice ${invoice_id}`,
+        description: `Mr Phone - Invoice ${invoice_id}`,
       },
       interaction: {
         operation: "PURCHASE",
